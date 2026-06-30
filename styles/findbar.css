@@ -1,3 +1,7 @@
+.hidden {
+  display: none !important;
+}
+
 browser {
   will-change: transform;
 }
@@ -430,37 +434,49 @@ browser {
 
       .api-key-input-group {
         display: flex;
+        flex-direction: column;
         gap: 8px;
+
+        .api-input {
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .api-key-row {
+          display: flex;
+          gap: 8px;
+          width: 100%;
+
+          button {
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            background-color: var(--browse-bot-primary-bg) !important;
+            min-width: 60px !important;
+            font-size: 17px !important;
+            appearance: none !important;
+            outline: none !important;
+
+            &:hover {
+              transform: translateY(-1px);
+            }
+
+            &:active {
+              transform: translateY(0);
+            }
+
+            &:disabled {
+              opacity: 0.6;
+              cursor: not-allowed;
+              transform: none;
+            }
+          }
+        }
 
         input {
           flex-grow: 1 !important;
-        }
-
-        button {
-          cursor: pointer;
-          font-weight: 600;
-          transition: all 0.2s ease;
-          position: relative;
-          overflow: hidden;
-          background-color: var(--browse-bot-primary-bg) !important;
-          min-width: 60px !important;
-          font-size: 17px !important;
-          appearance: none !important;
-          outline: none !important;
-
-          &:hover {
-            transform: translateY(-1px);
-          }
-
-          &:active {
-            transform: translateY(0);
-          }
-
-          &:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-          }
         }
       }
 
@@ -524,6 +540,7 @@ browser {
         position: relative;
         display: flex;
         flex-direction: column;
+        user-select: text;
       }
 
       .chat-message-user {
@@ -538,6 +555,10 @@ browser {
       .chat-message-ai {
         max-width: calc(100% - 15px) !important;
         align-self: flex-start;
+
+        .message-content {
+          user-select: text;
+        }
       }
 
       .chat-message-error {
@@ -572,7 +593,7 @@ browser {
           flex-grow: 1 !important;
           display: flex !important;
           align-items: center !important;
-          border-radius: 8 !important;
+          border-radius: 0 !important;
           padding: 0 !important;
           min-height: 20px !important;
           max-height: 160px !important;
@@ -667,13 +688,21 @@ browser {
         font-weight: 500;
 
         &[data-status="loading"] {
-          /* FIX: hiding loading indicator from css unelss i figure out a way to hide it correctly*/
-          display: none !important;
-          background-color: var(--browse-bot-muted-bg);
+          background-color: color-mix(in srgb, var(--browse-bot-muted-bg) 60%, transparent 40%);
           color: var(--browse-bot-muted);
+          opacity: 0.8;
 
           .tool-call-icon {
             animation: spin 0.7s linear infinite;
+          }
+
+          .tool-call-name::after {
+            content: "";
+            display: inline-block;
+            width: 4px;
+            margin-left: 2px;
+            animation: pulse 1s ease-in-out infinite;
+            vertical-align: middle;
           }
         }
 
@@ -685,6 +714,15 @@ browser {
         &[data-status="error"] {
           background-color: var(--browse-bot-error-bg);
           color: var(--browse-bot-error);
+        }
+
+        .tool-call-error {
+          display: block;
+          font-size: 12px;
+          font-weight: 400;
+          opacity: 0.85;
+          margin-top: 2px;
+          word-break: break-word;
         }
 
         &[data-status="declined"] {
