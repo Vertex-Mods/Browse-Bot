@@ -2,8 +2,8 @@
 // @name            Browse Bot
 // @description     Transforms the standard Zen Browser findbar into a modern, floating, AI-powered chat interface. Inspired by Arc Browser.
 // @author          Bibek Bhusal
-// @version         2.5.86
-// @lastUpdated     2026-06-21
+// @version         2.5.88
+// @lastUpdated     2026-07-14
 // @ignorecache
 // @homepage        https://github.com/Vertex-Mods/Browse-Bot
 // ==/UserScript==
@@ -140,6 +140,9 @@ class BrowseBotPREFS extends PREFS {
   static CEREBRAS_MODEL = "extension.browse-bot.cerebras-model";
   static OLLAMA_MODEL = "extension.browse-bot.ollama-model";
   static OLLAMA_BASE_URL = "extension.browse-bot.ollama-base-url";
+  static CUSTOM_API_KEY = "extension.browse-bot.custom-api-key";
+  static CUSTOM_MODEL = "extension.browse-bot.custom-model";
+  static CUSTOM_BASE_URL = "extension.browse-bot.custom-base-url";
   static LLM_TEMPERATURE = "extension.browse-bot.llm.temperature";
   static LLM_TOP_P = "extension.browse-bot.llm.top-p";
   static LLM_TOP_K = "extension.browse-bot.llm.top-k";
@@ -180,6 +183,9 @@ class BrowseBotPREFS extends PREFS {
     [BrowseBotPREFS.CEREBRAS_MODEL]: "llama3.1-8b",
     [BrowseBotPREFS.OLLAMA_MODEL]: "llama2",
     [BrowseBotPREFS.OLLAMA_BASE_URL]: "http://localhost:11434/api",
+    [BrowseBotPREFS.CUSTOM_API_KEY]: "",
+    [BrowseBotPREFS.CUSTOM_MODEL]: "",
+    [BrowseBotPREFS.CUSTOM_BASE_URL]: "",
     [BrowseBotPREFS.DND_ENABLED]: !0,
     [BrowseBotPREFS.POSITION]: "top-right",
     [BrowseBotPREFS.REMEMBER_DIMENSIONS]: !0,
@@ -746,19 +752,28 @@ var SettingsModal = {
     if (placeholder)
       placeholder.replaceWith(providerSelectorXulElement);
     for (let [name, provider] of Object.entries(browseBotFindbarLLM.AVAILABLE_PROVIDERS)) {
-      let { modelPref: modelPrefKey, model: currentModel } = provider, modelOptionsXUL = provider.AVAILABLE_MODELS.map((model) => `<menuitem
-              value="${model}"
-              label="${escapeXmlAttribute(provider.AVAILABLE_MODELS_LABELS[model] || model)}"
-              ${model === currentModel ? 'selected="true"' : ""}
-            />`).join(""), modelMenulistXul = `
-          <menulist id="pref-${this._getSafeIdForProvider(name)}-model" data-pref="${modelPrefKey}" value="${currentModel}">
-            <menupopup>
-              ${modelOptionsXUL}
-            </menupopup>
-          </menulist>`, modelPlaceholder = this._modalElement.querySelector(`#llm-model-selector-placeholder-${this._getSafeIdForProvider(name)}`);
+      let { modelPref: modelPrefKey, model: currentModel } = provider, modelPlaceholder = this._modalElement.querySelector(`#llm-model-selector-placeholder-${this._getSafeIdForProvider(name)}`);
       if (modelPlaceholder) {
-        let modelSelectorXulElement = parseElement(modelMenulistXul, "xul");
-        modelPlaceholder.replaceWith(modelSelectorXulElement);
+        let modelSelectorElement;
+        if (name === "custom") {
+          let modelInputHtml = `
+            <input type="text" id="pref-${this._getSafeIdForProvider(name)}-model" data-pref="${modelPrefKey}" value="${escapeXmlAttribute(currentModel || "")}" placeholder="e.g. deepseek-chat" />
+          `;
+          modelSelectorElement = parseElement(modelInputHtml, "html");
+        } else {
+          let modelOptionsXUL = provider.AVAILABLE_MODELS.map((model) => `<menuitem
+                  value="${model}"
+                  label="${escapeXmlAttribute(provider.AVAILABLE_MODELS_LABELS[model] || model)}"
+                  ${model === currentModel ? 'selected="true"' : ""}
+                />`).join(""), modelMenulistXul = `
+              <menulist id="pref-${this._getSafeIdForProvider(name)}-model" data-pref="${modelPrefKey}" value="${currentModel}">
+                <menupopup>
+                  ${modelOptionsXUL}
+                </menupopup>
+              </menulist>`;
+          modelSelectorElement = parseElement(modelMenulistXul, "xul");
+        }
+        modelPlaceholder.replaceWith(modelSelectorElement);
       }
     }
     return this._attachEventListeners(), container;
@@ -823,6 +838,53 @@ var SettingsModal = {
           this._currentShortcutTarget.classList.remove("recording"), this._currentShortcutTarget.placeholder = "Click to set", this._currentShortcutTarget = null, window.removeEventListener("keydown", this._boundHandleShortcutKeyDown, !0);
       }), input.addEventListener("keydown", (e) => {
         e.preventDefault(), e.stopPropagation();
+      });
+    });
+    let modelInput = this._modalElement.querySelector("#pref-custom-model");
+    if (modelInput)
+      modelInput.addEventListener("input", () => {
+        modelInput.classList.remove("verify-success", "verify-error");
+        let statusEl = this._modalElement.querySelector('[data-verify-status="custom"]');
+        if (statusEl)
+          statusEl.className = "verify-model-status", statusEl.textContent = "";
+      });
+    this._modalElement.querySelectorAll(".verify-model-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        let provider = btn.dataset.verifyModel, statusEl = this._modalElement.querySelector(`[data-verify-status="${provider}"]`), modelInput2 = this._modalElement.querySelector("#pref-custom-model");
+        if (!statusEl)
+          return;
+        let baseUrl = this._currentPrefValues[PREFS2.CUSTOM_BASE_URL] || "", model = this._currentPrefValues[PREFS2.CUSTOM_MODEL] || "", apiKey = this._currentPrefValues[PREFS2.CUSTOM_API_KEY] || "", setError = (msg) => {
+          if (statusEl.textContent = msg, statusEl.className = "verify-model-status error", modelInput2)
+            modelInput2.classList.remove("verify-success"), modelInput2.classList.add("verify-error");
+        };
+        if (!baseUrl) {
+          setError("Enter a base URL first");
+          return;
+        }
+        if (!model) {
+          setError("Enter a model name");
+          return;
+        }
+        if (statusEl.textContent = "Verifying...", statusEl.className = "verify-model-status", modelInput2)
+          modelInput2.classList.remove("verify-success", "verify-error");
+        btn.disabled = !0;
+        try {
+          let url = `${baseUrl.replace(/\/+$/, "")}/models/${encodeURIComponent(model)}`, headers = { "Content-Type": "application/json" };
+          if (apiKey)
+            headers.Authorization = `Bearer ${apiKey}`;
+          let response = await fetch(url, { headers });
+          if (response.ok) {
+            if (statusEl.textContent = `Model "${model}" exists`, statusEl.className = "verify-model-status success", modelInput2)
+              modelInput2.classList.add("verify-success"), modelInput2.classList.remove("verify-error");
+          } else if (response.status === 404)
+            setError(`Model "${model}" not found`);
+          else
+            setError(`Error: ${response.status}`);
+        } catch {
+          setError("Connection failed");
+        } finally {
+          btn.disabled = !1;
+        }
       });
     }), this._updateProviderSpecificSettings(this._modalElement, PREFS2.llmProvider), this._modalElement.querySelectorAll(".reset-section-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -1052,7 +1114,19 @@ var SettingsModal = {
           <input type="text" id="pref-ollama-base-url" data-pref="${PREFS2.OLLAMA_BASE_URL}" placeholder="http://localhost:11434/api" />
         </div>
       `;
-      else {
+      else if (name === "custom") {
+        let baseUrlPrefKey = PREFS2.CUSTOM_BASE_URL, apiPrefKey = PREFS2.CUSTOM_API_KEY;
+        apiInputHtml = `
+        <div class="setting-item">
+          <label for="pref-custom-base-url">Base URL</label>
+          <input type="text" id="pref-custom-base-url" data-pref="${baseUrlPrefKey}" placeholder="https://api.your-provider.com/v1" />
+        </div>
+        <div class="setting-item">
+          <label for="pref-custom-api-key">API Key</label>
+          <input type="password" id="pref-custom-api-key" data-pref="${apiPrefKey}" placeholder="Enter Custom API Key" />
+        </div>
+      `;
+      } else {
         let apiPrefKey = PREFS2[`${name.toUpperCase()}_API_KEY`];
         apiInputHtml = apiPrefKey ? `
         <div class="setting-item">
@@ -1062,9 +1136,13 @@ var SettingsModal = {
       ` : "";
       }
       let modelSelectPlaceholderHtml = modelPrefKey ? `
-        <div class="setting-item">
+        <div class="setting-item" data-provider-model="${name}">
           <label for="pref-${this._getSafeIdForProvider(name)}-model">Model</label>
-          <div id="llm-model-selector-placeholder-${this._getSafeIdForProvider(name)}"></div>
+          <div class="model-input-row">
+            <div id="llm-model-selector-placeholder-${this._getSafeIdForProvider(name)}"></div>
+            ${name === "custom" ? '<button class="verify-model-btn" data-verify-model="custom">Verify</button>' : ""}
+          </div>
+          ${name === "custom" ? '<span class="verify-model-status" data-verify-status="custom"></span>' : ""}
         </div>
       ` : "";
       llmProviderSettingsHtml += `
@@ -1085,6 +1163,7 @@ var SettingsModal = {
             <div class="reset-section-btn" data-reset-prefs="${[
       PREFS2.LLM_PROVIDER,
       PREFS2.OLLAMA_BASE_URL,
+      PREFS2.CUSTOM_BASE_URL,
       ...Object.values(browseBotFindbarLLM.AVAILABLE_PROVIDERS).flatMap((p) => [p.modelPref, PREFS2[`${p.name.toUpperCase()}_API_KEY`]]).filter(Boolean)
     ].join(",")}" title="Reset Section" role="button">
                 <img src="chrome://global/skin/icons/reload.svg" />
@@ -2204,7 +2283,7 @@ function parseMD(markdown, convertHTML = !0) {
   if (convertHTML)
     return htmlContent;
   else
-    return htmlContent.innerHTML;
+    return htmlContent.innerHTML.replace(/<(img|hr|br|input)([^>]*?)(?<!\/)>/gi, "<$1$2 />");
 }
 PREFS2.setInitialPrefs();
 var browseBotFindbar = {
@@ -2442,8 +2521,12 @@ var browseBotFindbar = {
               <label for="provider-selector">Select Provider:</label>
             </div>
             <div class="api-key-input-group">
-              <input type="password" id="api-key" placeholder="Enter your API key" />
-              <button id="save-api-key">Save</button>
+              <input type="text" id="base-url" class="api-input" placeholder="Enter API Endpoint (e.g. https://api.your-provider.com/v1)" />
+              <input type="text" id="model-name" class="api-input" placeholder="Enter Model Name (e.g. deepseek-chat)" />
+              <div class="api-key-row">
+                <input type="password" id="api-key" placeholder="Enter your API key" />
+                <button id="save-api-key">Save</button>
+              </div>
             </div>
             <div class="api-key-links">
               <button id="get-api-key-link">Get API Key</button>
@@ -2458,8 +2541,12 @@ var browseBotFindbar = {
               <label for="provider-selector">Select Provider:</label>
             </div>
             <div class="api-key-input-group">
-              <input type="password" id="api-key" placeholder="Enter your API key" />
-              <button id="save-api-key">Save</button>
+              <input type="text" id="base-url" class="api-input" placeholder="Enter API Endpoint (e.g. https://api.your-provider.com/v1)" />
+              <input type="text" id="model-name" class="api-input" placeholder="Enter Model Name (e.g. deepseek-chat)" />
+              <div class="api-key-row">
+                <input type="password" id="api-key" placeholder="Enter your API key" />
+                <button id="save-api-key">Save</button>
+              </div>
             </div>
             <div class="api-key-links">
               <button id="get-api-key-link">Get API Key</button>
@@ -2468,11 +2555,20 @@ var browseBotFindbar = {
         </div>`);
     container.querySelector(".provider-selection-group").appendChild(providerSelectorXulElement);
     let providerSelector = container.querySelector("#provider-selector"), input = container.querySelector("#api-key"), saveBtn = container.querySelector("#save-api-key"), getApiKeyLink = container.querySelector("#get-api-key-link"), description = container.querySelector(".ai-setup-content").querySelector("p"), updateUIForProvider = (providerName) => {
-      let provider = browseBotFindbarLLM.AVAILABLE_PROVIDERS[providerName];
-      if (providerName === "ollama")
-        description.textContent = "Ollama is selected. You can customize the Base URL below or use the default.", input.type = "text", input.placeholder = "Enter Ollama Base URL", input.value = PREFS2.ollamaBaseUrl || "", getApiKeyLink.style.display = "none";
-      else
-        description.textContent = "To use AI features, you need to set up your API key and select a provider.", input.type = "password", input.placeholder = "Enter your API key", input.value = provider.apiKey || "", getApiKeyLink.style.display = provider.apiKeyUrl ? "inline-block" : "none", getApiKeyLink.disabled = !provider.apiKeyUrl, getApiKeyLink.title = provider.apiKeyUrl ? "Get API Key" : "No API key link available for this provider.";
+      let provider = browseBotFindbarLLM.AVAILABLE_PROVIDERS[providerName], baseUrlInput = container.querySelector("#base-url"), modelNameInput = container.querySelector("#model-name"), apiKeyRow = container.querySelector(".api-key-row");
+      if (providerName === "ollama") {
+        if (description.textContent = "Ollama is selected. Configure the Base URL and Model name below.", baseUrlInput?.classList.remove("hidden"), modelNameInput?.classList.remove("hidden"), apiKeyRow?.classList.add("hidden"), getApiKeyLink.style.display = "none", baseUrlInput)
+          baseUrlInput.value = PREFS2.ollamaBaseUrl || "";
+        if (modelNameInput)
+          modelNameInput.value = PREFS2.getPref(PREFS2.OLLAMA_MODEL) || "";
+      } else if (providerName === "custom") {
+        if (description.textContent = "Custom Provider is selected. Please enter the API Endpoint, Model name, and your API Key.", baseUrlInput?.classList.remove("hidden"), modelNameInput?.classList.remove("hidden"), apiKeyRow?.classList.remove("hidden"), getApiKeyLink.style.display = "none", baseUrlInput)
+          baseUrlInput.value = PREFS2.getPref(PREFS2.CUSTOM_BASE_URL) || "";
+        if (modelNameInput)
+          modelNameInput.value = PREFS2.getPref(PREFS2.CUSTOM_MODEL) || "";
+        input.value = PREFS2.getPref(PREFS2.CUSTOM_API_KEY) || "";
+      } else
+        description.textContent = "To use AI features, you need to set up your API key and select a provider.", baseUrlInput?.classList.add("hidden"), modelNameInput?.classList.add("hidden"), apiKeyRow?.classList.remove("hidden"), input.value = provider.apiKey || "", getApiKeyLink.style.display = provider.apiKeyUrl ? "inline-block" : "none", getApiKeyLink.disabled = !provider.apiKeyUrl, getApiKeyLink.title = provider.apiKeyUrl ? "Get API Key" : "No API key link available for this provider.";
     };
     return updateUIForProvider(currentProviderName), providerSelector.addEventListener("command", (e) => {
       let selectedProviderName = e.target.value;
@@ -2480,16 +2576,30 @@ var browseBotFindbar = {
     }), getApiKeyLink.addEventListener("click", () => {
       openTrustedLinkIn(browseBotFindbarLLM.currentProvider.apiKeyUrl, "tab");
     }), saveBtn.addEventListener("click", () => {
-      let value = input.value.trim();
-      if (browseBotFindbarLLM.currentProvider.name === "ollama") {
-        if (value)
-          PREFS2.ollamaBaseUrl = value;
+      let providerName = browseBotFindbarLLM.currentProvider.name, baseUrlInput = container.querySelector("#base-url"), modelNameInput = container.querySelector("#model-name");
+      if (providerName === "ollama") {
+        let baseUrl = baseUrlInput ? baseUrlInput.value.trim() : "", model = modelNameInput ? modelNameInput.value.trim() : "";
+        if (baseUrl)
+          PREFS2.ollamaBaseUrl = baseUrl;
+        if (model)
+          PREFS2.setPref(PREFS2.OLLAMA_MODEL, model);
         this.showAIInterface();
-      } else if (value)
-        browseBotFindbarLLM.currentProvider.apiKey = value, this.showAIInterface();
-    }), input.addEventListener("keypress", (e) => {
-      if (e.key === "Enter")
-        saveBtn.click();
+      } else if (providerName === "custom") {
+        let endpoint = baseUrlInput ? baseUrlInput.value.trim() : "", model = modelNameInput ? modelNameInput.value.trim() : "", value = input.value.trim();
+        if (endpoint)
+          PREFS2.setPref(PREFS2.CUSTOM_BASE_URL, endpoint);
+        if (model)
+          PREFS2.setPref(PREFS2.CUSTOM_MODEL, model);
+        if (value)
+          PREFS2.setPref(PREFS2.CUSTOM_API_KEY, value);
+        this.showAIInterface();
+      } else if (input.value.trim())
+        browseBotFindbarLLM.currentProvider.apiKey = input.value.trim(), this.showAIInterface();
+    }), [input, container.querySelector("#base-url"), container.querySelector("#model-name")].forEach((el) => {
+      el?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter")
+          saveBtn.click();
+      });
     }), container;
   },
   _removeToolCallUI() {
@@ -2515,6 +2625,8 @@ var browseBotFindbar = {
 <div class="tool-call-status" data-tool-name="${toolName}" data-status="${status}">
   <span class="tool-call-icon">${icons[status] || ""}</span>
   <span class="tool-call-name">${friendlyName}</span>
+  ${status === "error" && errorMsg ? `<span class="tool-call-error">${escapeXmlAttribute(errorMsg)}</span>` : ""}
+  ${status === "declined" ? '<span class="tool-call-error">Declined by user</span>' : ""}
 </div>
 `);
     container.appendChild(toolDiv);
@@ -2574,7 +2686,9 @@ Declined by user.`;
           try {
             contentDiv.innerHTML = parseMD(fullText, !1);
           } catch (e) {
-            PREFS2.debugError("innerHTML assignment failed:", e.message);
+            PREFS2.debugError("innerHTML assignment failed:", e.message), contentDiv.textContent = fullText + `
+
+[Error rendering markdown]`;
           }
           if (setTimeout(() => this._updateFindbarDimensions(), 0), messagesContainer)
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -2589,7 +2703,9 @@ Declined by user.`;
         if (PREFS2.debugError("Error sending message:", e), aiMessageDiv)
           aiMessageDiv.remove();
         this.addChatMessage({ role: "error", content: `**Error**: ${e.message}` });
-      } else if (PREFS2.debugLog("Streaming aborted by user."), aiMessageDiv)
+      } else if (PREFS2.debugLog("Streaming aborted by user."), contentDiv && contentDiv.textContent.trim())
+        contentDiv.appendChild(parseMD("_Stopped_"));
+      else if (aiMessageDiv)
         aiMessageDiv.remove();
     } finally {
       this._toggleStreamingControls(!1), this._abortController = null, this._removeToolCallUI(), this._currentAIMessageDiv = null;
@@ -2771,10 +2887,15 @@ Declined by user.`;
     }
     messageDiv.appendChild(contentDiv), messagesContainer.appendChild(messageDiv), messagesContainer.scrollTop = messagesContainer.scrollHeight, setTimeout(() => this._updateFindbarDimensions(), 10);
   },
+  _needsSetup() {
+    if (browseBotFindbarLLM.currentProvider.name === "ollama")
+      return !PREFS2.ollamaBaseUrl || !PREFS2.getPref(PREFS2.OLLAMA_MODEL);
+    return !browseBotFindbarLLM.currentProvider.apiKey;
+  },
   showAIInterface() {
     if (!this.findbar)
       return;
-    if (this.removeAIInterface(), this.findbar.classList.remove("ai-settings-active"), !browseBotFindbarLLM.currentProvider.apiKey && browseBotFindbarLLM.currentProvider.name !== "ollama")
+    if (this.removeAIInterface(), this.findbar.classList.remove("ai-settings-active"), this._needsSetup())
       this.apiKeyContainer = this.createAPIKeyInterface(), this.findbar.insertBefore(this.apiKeyContainer, this.findbar.firstChild);
     else {
       if (this.chatContainer = this.createChatInterface(), PREFS2.dndEnabled)
@@ -2873,8 +2994,12 @@ Declined by user.`;
         PREFS2.debugError("Failed to add context menu item after 5 attempts: Context menu not found.");
       return;
     }
-    let menuItem = document.createXULElement("menuitem");
-    menuItem.id = "browse-bot-context-menu-item", menuItem.setAttribute("label", "Ask AI"), menuItem.setAttribute("accesskey", "A"), menuItem.addEventListener("command", this.handleContextMenuClick.bind(this)), this.contextMenuItem = menuItem;
+    let menuItem = parseElement(`<menuitem 
+      label="Ask AI"
+      accesskey="A" 
+      id = "browse-bot-context-menu-item">
+      </menuitem>`, "xul");
+    menuItem.addEventListener("command", this.handleContextMenuClick.bind(this)), this.contextMenuItem = menuItem;
     let searchSelectItem = contextMenu.querySelector("#context-searchselect");
     if (searchSelectItem)
       if (searchSelectItem.nextSibling)
@@ -3057,14 +3182,11 @@ Declined by user.`;
 
 // findbar-ai/llm/providers.js
 import {
-  createMistral,
   createGoogleGenerativeAI,
   createOpenAI,
   createAnthropic,
-  createGrok,
-  createPerplexity,
-  createCerebras,
-  createOllama
+  createOpenAICompatible,
+  createCerebras
 } from "./vercel-ai-sdk.uc.mjs";
 
 // utils/favicon.js
@@ -3091,11 +3213,23 @@ var providerPrototype = {
     return prefs_default.getPref(this.modelPref);
   },
   set model(v) {
-    if (this.AVAILABLE_MODELS.includes(v))
+    if (!this.AVAILABLE_MODELS) {
+      if (typeof v === "string" && this.modelPref)
+        prefs_default.setPref(this.modelPref, v);
+    } else if (this.AVAILABLE_MODELS.includes(v))
       prefs_default.setPref(this.modelPref, v);
   },
   getModel() {
-    return this.create({ apiKey: this.apiKey })(this.model);
+    if (this.create === createOpenAICompatible) {
+      let config2 = {
+        name: this.name,
+        apiKey: this.apiKey || "not_required",
+        baseURL: this.baseURL
+      };
+      return this.create(config2).chatModel(this.model);
+    }
+    let config = { apiKey: this.apiKey };
+    return this.create(config)(this.model);
   }
 }, mistral = Object.assign(Object.create(providerPrototype), {
   name: "mistral",
@@ -3134,7 +3268,8 @@ var providerPrototype = {
   },
   modelPref: prefs_default.MISTRAL_MODEL,
   apiPref: prefs_default.MISTRAL_API_KEY,
-  create: createMistral
+  create: createOpenAICompatible,
+  baseURL: "https://api.mistral.ai/v1"
 }), gemini = Object.assign(Object.create(providerPrototype), {
   name: "gemini",
   label: "Google Gemini",
@@ -3183,6 +3318,10 @@ var providerPrototype = {
   faviconUrl: googleFaviconAPI("chatgpt.com"),
   apiKeyUrl: "https://platform.openai.com/account/api-keys",
   AVAILABLE_MODELS: [
+    "gpt-5.6",
+    "gpt-5.6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
     "gpt-5.5",
     "gpt-5.4-pro",
     "gpt-5.4",
@@ -3216,6 +3355,10 @@ var providerPrototype = {
     "gpt-5-codex"
   ],
   AVAILABLE_MODELS_LABELS: {
+    "gpt-5.6": "GPT 5.6",
+    "gpt-5.6-luna": "GPT 5.6 Luna",
+    "gpt-5.6-sol": "GPT 5.6 Sol",
+    "gpt-5.6-terra": "GPT 5.6 Terra",
     "gpt-5.5": "GPT 5.5",
     "gpt-5.4-pro": "GPT 5.4 Pro",
     "gpt-5.4": "GPT 5.4",
@@ -3257,6 +3400,7 @@ var providerPrototype = {
   faviconUrl: googleFaviconAPI("anthropic.com"),
   apiKeyUrl: "https://console.anthropic.com/dashboard",
   AVAILABLE_MODELS: [
+    "claude-sonnet-5",
     "claude-fable-5",
     "claude-opus-4-8",
     "claude-opus-4-7",
@@ -3272,6 +3416,7 @@ var providerPrototype = {
     "claude-3-5-haiku-latest"
   ],
   AVAILABLE_MODELS_LABELS: {
+    "claude-sonnet-5": "Claude Sonnet 5",
     "claude-fable-5": "Claude Fable 5",
     "claude-opus-4-8": "Claude Opus 4.8",
     "claude-opus-4-7": "Claude Opus 4.7",
@@ -3295,6 +3440,7 @@ var providerPrototype = {
   faviconUrl: googleFaviconAPI("x.ai"),
   apiKeyUrl: "https://x.ai/api",
   AVAILABLE_MODELS: [
+    "grok-4.5",
     "grok-4.20-reasoning",
     "grok-4.20-non-reasoning",
     "grok-4-1-fast-reasoning",
@@ -3316,6 +3462,7 @@ var providerPrototype = {
     "grok-2-latest"
   ],
   AVAILABLE_MODELS_LABELS: {
+    "grok-4.5": "Grok 4.5",
     "grok-4.20-reasoning": "Grok 4.20 (Reasoning)",
     "grok-4.20-non-reasoning": "Grok 4.20 (Non-Reasoning)",
     "grok-4-1-fast-reasoning": "Grok 4.1 Fast (Reasoning)",
@@ -3338,7 +3485,8 @@ var providerPrototype = {
   },
   modelPref: prefs_default.GROK_MODEL,
   apiPref: prefs_default.GROK_API_KEY,
-  create: createGrok
+  create: createOpenAICompatible,
+  baseURL: "https://api.x.ai/v1"
 }), perplexity = Object.assign(Object.create(providerPrototype), {
   name: "perplexity",
   label: "Perplexity AI",
@@ -3360,7 +3508,8 @@ var providerPrototype = {
   },
   modelPref: prefs_default.PERPLEXITY_MODEL,
   apiPref: prefs_default.PERPLEXITY_API_KEY,
-  create: createPerplexity
+  create: createOpenAICompatible,
+  baseURL: "https://api.perplexity.ai"
 }), cerebras = Object.assign(Object.create(providerPrototype), {
   name: "cerebras",
   label: "Cerebras AI",
@@ -3397,6 +3546,9 @@ var providerPrototype = {
   set baseUrl(v) {
     if (typeof v === "string")
       prefs_default.ollamaBaseUrl = v;
+  },
+  get baseURL() {
+    return this.baseUrl.replace(/\/api$/, "/v1");
   },
   AVAILABLE_MODELS: [
     "deepseek-r1:8b",
@@ -3445,12 +3597,26 @@ var providerPrototype = {
   set apiKey(v) {
     return;
   },
-  getModel() {
-    return createOllama({
-      baseURL: this.baseUrl
-    })(this.model);
-  }
-});
+  create: createOpenAICompatible
+}), custom = Object.create(providerPrototype, Object.getOwnPropertyDescriptors({
+  name: "custom",
+  label: "Custom Provider (OpenAI Compatible)",
+  faviconUrl: "chrome://global/skin/icons/settings.svg",
+  apiKeyUrl: "",
+  modelPref: prefs_default.CUSTOM_MODEL,
+  apiPref: prefs_default.CUSTOM_API_KEY,
+  get model() {
+    return prefs_default.getPref(this.modelPref) || "";
+  },
+  set model(v) {
+    if (typeof v === "string")
+      prefs_default.setPref(this.modelPref, v);
+  },
+  get baseURL() {
+    return prefs_default.getPref(prefs_default.CUSTOM_BASE_URL) || "";
+  },
+  create: createOpenAICompatible
+}));
 
 // findbar-ai/llm/index.js
 var citationSchema = z2.object({
@@ -3471,7 +3637,8 @@ class LLM {
       ollama,
       openai,
       perplexity,
-      cerebras
+      cerebras,
+      custom
     };
   }
   get llmProvider() {
@@ -3932,48 +4099,51 @@ function startupFinish(callback) {
     window.addEventListener("load", callback, { once: !0 });
 }
 
-// findbar-ai/index.js
-function setupCommandPaletteIntegration(retryCount = 0) {
+// utils/command-palete.js
+function addCommands(commands, retryCount = 0) {
   if (window.ZenCommandPalette)
-    PREFS2.debugLog("Integrating with Zen Command Palette..."), window.ZenCommandPalette.addCommands([
-      {
-        key: "browsebot:summarize",
-        label: "Summarize Page",
-        command: () => {
-          browseBotFindbar.expanded = !0, browseBotFindbar.sendMessage(PREFS2.contextMenuCommandNoSelection), browseBotFindbar.focusPrompt();
-        },
-        condition: () => PREFS2.enabled,
-        icon: "chrome://global/skin/icons/highlights.svg",
-        tags: ["AI", "Summarize", "BrowseBot", "findbar"]
+    window.ZenCommandPalette.addCommands(commands);
+  else if (retryCount < 10)
+    setTimeout(() => addCommands(commands, retryCount + 1), 1000);
+}
+
+// findbar-ai/index.js
+function setupCommandPaletteIntegration() {
+  addCommands([
+    {
+      key: "browsebot:summarize",
+      label: "Summarize Page",
+      command: () => {
+        browseBotFindbar.expanded = !0, browseBotFindbar.sendMessage(PREFS2.contextMenuCommandNoSelection), browseBotFindbar.focusPrompt();
       },
-      {
-        key: "browsebot:settings",
-        label: "Open BrowseBot Settings",
-        command: () => SettingsModal.show(),
-        icon: "chrome://global/skin/icons/settings.svg",
-        tags: ["AI", "BrowseBot", "Settings"]
-      },
-      {
-        key: "browsebot:urlbarAi",
-        label: "Toggle URL bar AI mode",
-        command: () => urlbarAI.toggleAIMode(),
-        condition: () => urlbarAI.enabled,
-        icon: "chrome://global/skin/icons/highlights.svg",
-        tags: ["AI", "BrowseBot", "URL", "Command"]
-      },
-      {
-        key: "browsebot:expand-findbar",
-        label: "Expand findbar AI",
-        command: () => browseBotFindbar.expanded = !0,
-        condition: () => PREFS2.enabled,
-        icon: "chrome://global/skin/icons/highlights.svg",
-        tags: ["AI", "BrowseBot", "findbar"]
-      }
-    ]), PREFS2.debugLog("Zen Command Palette integration successful.");
-  else if (PREFS2.debugLog("Zen Command Palette not found, retrying in 1000ms"), retryCount < 10)
-    setTimeout(() => setupCommandPaletteIntegration(retryCount + 1), 1000);
-  else
-    PREFS2.debugError("Could not integrate with Zen Command Palette after 10 retries.");
+      condition: () => PREFS2.enabled,
+      icon: "chrome://global/skin/icons/highlights.svg",
+      tags: ["AI", "Summarize", "BrowseBot", "findbar"]
+    },
+    {
+      key: "browsebot:settings",
+      label: "Open BrowseBot Settings",
+      command: () => SettingsModal.show(),
+      icon: "chrome://global/skin/icons/settings.svg",
+      tags: ["AI", "BrowseBot", "Settings"]
+    },
+    {
+      key: "browsebot:urlbarAi",
+      label: "Toggle URL bar AI mode",
+      command: () => urlbarAI.toggleAIMode(),
+      condition: () => urlbarAI.enabled,
+      icon: "chrome://global/skin/icons/highlights.svg",
+      tags: ["AI", "BrowseBot", "URL", "Command"]
+    },
+    {
+      key: "browsebot:expand-findbar",
+      label: "Expand findbar AI",
+      command: () => browseBotFindbar.expanded = !0,
+      condition: () => PREFS2.enabled,
+      icon: "chrome://global/skin/icons/highlights.svg",
+      tags: ["AI", "BrowseBot", "findbar"]
+    }
+  ]);
 }
 function registerUrlBarShortcut(value = PREFS2.shortcutUrlbar) {
   if (!urlbarAI.enabled)

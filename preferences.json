@@ -86,6 +86,10 @@
       {
         "value": "perplexity",
         "label": "Perplexity AI"
+      },
+      {
+        "value": "custom",
+        "label": "Custom Provider"
       }
     ]
   },
@@ -112,6 +116,10 @@
     "defaultValue": "claude-opus-4-8",
     "description": "Select the Claude model to use.",
     "options": [
+      {
+        "value": "claude-sonnet-5",
+        "label": "Claude Sonnet 5"
+      },
       {
         "value": "claude-fable-5",
         "label": "Claude Fable 5"
@@ -290,6 +298,10 @@
     "defaultValue": "grok-4",
     "description": "Select the Grok model to use.",
     "options": [
+      {
+        "value": "grok-4.5",
+        "label": "Grok 4.5"
+      },
       {
         "value": "grok-4.20-reasoning",
         "label": "Grok 4.20 (Reasoning)"
@@ -590,6 +602,22 @@
     "description": "Select the OpenAI model to use.",
     "options": [
       {
+        "value": "gpt-5.6",
+        "label": "GPT 5.6"
+      },
+      {
+        "value": "gpt-5.6-luna",
+        "label": "GPT 5.6 Luna"
+      },
+      {
+        "value": "gpt-5.6-sol",
+        "label": "GPT 5.6 Sol"
+      },
+      {
+        "value": "gpt-5.6-terra",
+        "label": "GPT 5.6 Terra"
+      },
+      {
         "value": "gpt-5.5",
         "label": "GPT 5.5"
       },
@@ -829,6 +857,54 @@
         "if": {
           "property": "extension.browse-bot.llm-provider",
           "value": "cerebras"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extension.browse-bot.custom-api-key",
+    "label": "Custom API Key",
+    "type": "string",
+    "placeholder": "Enter your Custom API key",
+    "defaultValue": "",
+    "description": "Your personal API key for the custom provider.",
+    "conditions": [
+      {
+        "if": {
+          "property": "extension.browse-bot.llm-provider",
+          "value": "custom"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extension.browse-bot.custom-model",
+    "label": "Custom Model",
+    "type": "string",
+    "placeholder": "Enter model name (e.g. gpt-4o)",
+    "defaultValue": "",
+    "description": "The model name to use.",
+    "conditions": [
+      {
+        "if": {
+          "property": "extension.browse-bot.llm-provider",
+          "value": "custom"
+        }
+      }
+    ]
+  },
+  {
+    "property": "extension.browse-bot.custom-base-url",
+    "label": "Custom Base URL",
+    "type": "string",
+    "placeholder": "https://api.your-provider.com/v1",
+    "defaultValue": "",
+    "description": "The base URL for your OpenAI-compatible API.",
+    "conditions": [
+      {
+        "if": {
+          "property": "extension.browse-bot.llm-provider",
+          "value": "custom"
         }
       }
     ]
