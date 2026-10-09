@@ -2,8 +2,8 @@
 // @name            Browse Bot
 // @description     Transforms the standard Zen Browser findbar into a modern, floating, AI-powered chat interface. Inspired by Arc Browser.
 // @author          Bibek Bhusal
-// @version         2.5.90
-// @lastUpdated     2026-09-07
+// @version         3.0.0
+// @lastUpdated     2026-10-09
 // @ignorecache
 // @homepage        https://github.com/Vertex-Mods/Browse-Bot
 // ==/UserScript==
@@ -13,9 +13,17 @@
 // To make changes, please edit the source files in the repository:
 // https://github.com/BibekBhusal0/zen-custom-js
 
-
-// findbar-ai/llm/index.js
-import { streamText, generateText, Output, stepCountIs, z as z2 } from "./vercel-ai-sdk.uc.mjs";
+var __esm = (fn, res, err) => () => {
+  if (fn)
+    try {
+      res = fn(fn = 0);
+    } catch (e) {
+      err = [e];
+    }
+  if (err)
+    throw err[0];
+  return res;
+};
 
 // utils/pref.js
 function setPref(key, value) {
@@ -28,6 +36,19 @@ function setPref(key, value) {
     else
       prefService.setStringPref(key, value);
   } catch {}
+}
+function addPrefListener(name, callback) {
+  let modified_callback = () => {
+    callback({ value: getPref(name) });
+  };
+  return Services.prefs.addObserver(name, modified_callback), { name, observer: modified_callback, callback };
+}
+function removePrefListener(listener) {
+  if (listener && listener.name) {
+    let observer = listener.observer || listener.callback;
+    if (observer)
+      Services.prefs.removeObserver(listener.name, observer);
+  }
 }
 var getPref = (key, defaultValue) => {
   try {
@@ -48,361 +69,434 @@ var getPref = (key, defaultValue) => {
 }, resetPref = (key) => {
   if (Services.prefs.getPrefType(key) !== 0)
     Services.prefs.clearUserPref(key);
-};
-function addPrefListener(name, callback) {
-  let modified_callback = () => {
-    callback({ value: getPref(name) });
+}, PREFS;
+var init_pref = __esm(() => {
+  PREFS = class PREFS {
+    static MOD_NAME = "BasePrefs";
+    static DEBUG_MODE = "";
+    static defaultValues = {};
+    static getPref(key, defaultValue = void 0) {
+      let defaultVal = defaultValue !== void 0 ? defaultValue : this.defaultValues[key];
+      return getPref(key, defaultVal);
+    }
+    static setPref(prefKey, value) {
+      setPref(prefKey, value);
+    }
+    static setInitialPrefs() {
+      for (let [key, value] of Object.entries(this.defaultValues))
+        setPrefIfUnset(key, value);
+    }
+    static get debugMode() {
+      if (!this.DEBUG_MODE)
+        return !1;
+      return this.getPref(this.DEBUG_MODE);
+    }
+    static set debugMode(value) {
+      if (!this.DEBUG_MODE)
+        return;
+      this.setPref(this.DEBUG_MODE, value);
+    }
+    static debugLog(...args) {
+      if (this.debugMode)
+        console.log(`${this.MOD_NAME}:`, ...args);
+    }
+    static debugError(...args) {
+      if (this.debugMode)
+        console.error(`${this.MOD_NAME}:`, ...args);
+    }
   };
-  return Services.prefs.addObserver(name, modified_callback), { name, callback };
-}
-function removePrefListener(listener) {
-  if (listener && listener.name && listener.callback)
-    Services.prefs.removeObserver(listener.name, listener.callback);
-}
-
-class PREFS {
-  static MOD_NAME = "BasePrefs";
-  static DEBUG_MODE = "";
-  static defaultValues = {};
-  static getPref(key, defaultValue = void 0) {
-    let defaultVal = defaultValue !== void 0 ? defaultValue : this.defaultValues[key];
-    return getPref(key, defaultVal);
-  }
-  static setPref(prefKey, value) {
-    setPref(prefKey, value);
-  }
-  static setInitialPrefs() {
-    for (let [key, value] of Object.entries(this.defaultValues))
-      setPrefIfUnset(key, value);
-  }
-  static get debugMode() {
-    if (!this.DEBUG_MODE)
-      return !1;
-    return this.getPref(this.DEBUG_MODE);
-  }
-  static set debugMode(value) {
-    if (!this.DEBUG_MODE)
-      return;
-    this.setPref(this.DEBUG_MODE, value);
-  }
-  static debugLog(...args) {
-    if (this.debugMode)
-      console.log(`${this.MOD_NAME}:`, ...args);
-  }
-  static debugError(...args) {
-    if (this.debugMode)
-      console.error(`${this.MOD_NAME}:`, ...args);
-  }
-}
+});
 
 // findbar-ai/utils/prefs.js
-class BrowseBotPREFS extends PREFS {
-  static MOD_NAME = "BrowseBot";
-  static DEBUG_MODE = "extension.browse-bot.debug-mode";
-  static ENABLED = "extension.browse-bot.findbar-ai.enabled";
-  static MINIMAL = "extension.browse-bot.findbar-ai.minimal";
-  static PERSIST = "extension.browse-bot.findbar-ai.persist-chat";
-  static DND_ENABLED = "extension.browse-bot.findbar-ai.dnd-enabled";
-  static POSITION = "extension.browse-bot.findbar-ai.position";
-  static REMEMBER_DIMENSIONS = "extension.browse-bot.findbar-ai.remember-dimensions";
-  static WIDTH = "extension.browse-bot.findbar-ai.width";
-  static STREAM_ENABLED = "extension.browse-bot.findbar-ai.stream-enabled";
-  static AGENTIC_MODE = "extension.browse-bot.findbar-ai.agentic-mode";
-  static CITATIONS_ENABLED = "extension.browse-bot.findbar-ai.citations-enabled";
-  static MAX_TOOL_CALLS = "extension.browse-bot.findbar-ai.max-tool-calls";
-  static CONFORMATION = "extension.browse-bot.findbar-ai.conform-before-tool-call";
-  static CONTEXT_MENU_ENABLED = "extension.browse-bot.findbar-ai.context-menu-enabled";
-  static CONTEXT_MENU_AUTOSEND = "extension.browse-bot.findbar-ai.context-menu-autosend";
-  static CONTEXT_MENU_COMMAND_WITH_SELECTION = "extension.browse-bot.findbar-ai.context-menu-command-with-selection";
-  static CONTEXT_MENU_COMMAND_NO_SELECTION = "extension.browse-bot.findbar-ai.context-menu-command-no-selection";
-  static BACKGROUND_STYLE = "extension.browse-bot.findbar-ai.background-style";
-  static CUSTOM_SYSTEM_PROMPT = "extension.browse-bot.custom-system-prompt";
-  static SHORTCUT_FINDBAR = "extension.browse-bot.findbar-ai.shortcut-findbar";
-  static SHORTCUT_URLBAR = "extension.browse-bot.urlbar-ai.shortcut-urlbar";
-  static URLBAR_AI_ENABLED = "extension.browse-bot.urlbar-ai-enabled";
-  static URLBAR_AI_HIDE_SUGGESTIONS = "extension.browse-bot.urlbar-ai.hide-suggestions";
-  static URLBAR_AI_ANIMATIONS_ENABLED = "extension.browse-bot.urlbar-ai.animations-enabled";
-  static SOLID_BG = "extension.browse-bot.solid-bg";
-  static LLM_PROVIDER = "extension.browse-bot.llm-provider";
-  static MISTRAL_API_KEY = "extension.browse-bot.mistral-api-key";
-  static MISTRAL_MODEL = "extension.browse-bot.mistral-model";
-  static GEMINI_API_KEY = "extension.browse-bot.gemini-api-key";
-  static GEMINI_MODEL = "extension.browse-bot.gemini-model";
-  static OPENAI_API_KEY = "extension.browse-bot.openai-api-key";
-  static OPENAI_MODEL = "extension.browse-bot.openai-model";
-  static CLAUDE_API_KEY = "extension.browse-bot.claude-api-key";
-  static CLAUDE_MODEL = "extension.browse-bot.claude-model";
-  static GROK_API_KEY = "extension.browse-bot.grok-api-key";
-  static GROK_MODEL = "extension.browse-bot.grok-model";
-  static PERPLEXITY_API_KEY = "extension.browse-bot.perplexity-api-key";
-  static PERPLEXITY_MODEL = "extension.browse-bot.perplexity-model";
-  static CEREBRAS_API_KEY = "extension.browse-bot.cerebras-api-key";
-  static CEREBRAS_MODEL = "extension.browse-bot.cerebras-model";
-  static OLLAMA_MODEL = "extension.browse-bot.ollama-model";
-  static OLLAMA_BASE_URL = "extension.browse-bot.ollama-base-url";
-  static CUSTOM_API_KEY = "extension.browse-bot.custom-api-key";
-  static CUSTOM_MODEL = "extension.browse-bot.custom-model";
-  static CUSTOM_BASE_URL = "extension.browse-bot.custom-base-url";
-  static LLM_TEMPERATURE = "extension.browse-bot.llm.temperature";
-  static LLM_TOP_P = "extension.browse-bot.llm.top-p";
-  static LLM_TOP_K = "extension.browse-bot.llm.top-k";
-  static LLM_FREQUENCY_PENALTY = "extension.browse-bot.llm.frequency-penalty";
-  static LLM_PRESENCE_PENALTY = "extension.browse-bot.llm.presence-penalty";
-  static LLM_MAX_OUTPUT_TOKENS = "extension.browse-bot.llm.max-output-tokens";
-  static defaultValues = {
-    [BrowseBotPREFS.ENABLED]: !0,
-    [BrowseBotPREFS.URLBAR_AI_ENABLED]: !0,
-    [BrowseBotPREFS.URLBAR_AI_HIDE_SUGGESTIONS]: !0,
-    [BrowseBotPREFS.URLBAR_AI_ANIMATIONS_ENABLED]: !0,
-    [BrowseBotPREFS.MINIMAL]: !0,
-    [BrowseBotPREFS.AGENTIC_MODE]: !1,
-    [BrowseBotPREFS.DEBUG_MODE]: !1,
-    [BrowseBotPREFS.PERSIST]: !1,
-    [BrowseBotPREFS.STREAM_ENABLED]: !0,
-    [BrowseBotPREFS.CITATIONS_ENABLED]: !1,
-    [BrowseBotPREFS.CONTEXT_MENU_ENABLED]: !0,
-    [BrowseBotPREFS.CONTEXT_MENU_AUTOSEND]: !0,
-    [BrowseBotPREFS.CONTEXT_MENU_COMMAND_NO_SELECTION]: "Summarize current page",
-    [BrowseBotPREFS.CONTEXT_MENU_COMMAND_WITH_SELECTION]: `Explain this in context of current page:
+var BrowseBotPREFS, PREFS2, prefs_default;
+var init_prefs = __esm(() => {
+  init_pref();
+  BrowseBotPREFS = class BrowseBotPREFS extends PREFS {
+    static MOD_NAME = "BrowseBot";
+    static DEBUG_MODE = "extension.browse-bot.debug-mode";
+    static ENABLED = "extension.browse-bot.findbar-ai.enabled";
+    static MINIMAL = "extension.browse-bot.findbar-ai.minimal";
+    static PERSIST = "extension.browse-bot.findbar-ai.persist-chat";
+    static DND_ENABLED = "extension.browse-bot.findbar-ai.dnd-enabled";
+    static POSITION = "extension.browse-bot.findbar-ai.position";
+    static REMEMBER_DIMENSIONS = "extension.browse-bot.findbar-ai.remember-dimensions";
+    static WIDTH = "extension.browse-bot.findbar-ai.width";
+    static STREAM_ENABLED = "extension.browse-bot.findbar-ai.stream-enabled";
+    static CITATIONS_ENABLED = "extension.browse-bot.findbar-ai.citations-enabled";
+    static MAX_TOOL_CALLS = "extension.browse-bot.library-ai.max-tool-calls";
+    static MAX_CONTEXT_CHARS = "extension.browse-bot.findbar-ai.max-context-chars";
+    static CONFIRMATION = "extension.browse-bot.library-ai.confirm-before-tool-call";
+    static CONTEXT_MENU_ENABLED = "extension.browse-bot.findbar-ai.context-menu-enabled";
+    static CONTEXT_MENU_AUTOSEND = "extension.browse-bot.findbar-ai.context-menu-autosend";
+    static CONTEXT_MENU_COMMAND_WITH_SELECTION = "extension.browse-bot.findbar-ai.context-menu-command-with-selection";
+    static CONTEXT_MENU_COMMAND_NO_SELECTION = "extension.browse-bot.findbar-ai.context-menu-command-no-selection";
+    static BACKGROUND_STYLE = "extension.browse-bot.findbar-ai.background-style";
+    static FINDBAR_SYSTEM_PROMPT = "extension.browse-bot.findbar-ai.system-prompt";
+    static URLBAR_SYSTEM_PROMPT = "extension.browse-bot.urlbar-ai.system-prompt";
+    static LIBRARY_CHAT_SYSTEM_PROMPT = "extension.browse-bot.library-ai.chat-system-prompt";
+    static LIBRARY_AGENT_SYSTEM_PROMPT = "extension.browse-bot.library-ai.agent-system-prompt";
+    static LIBRARY_BUILD_SYSTEM_PROMPT = "extension.browse-bot.library-ai.build-system-prompt";
+    static SHORTCUT_FINDBAR = "extension.browse-bot.findbar-ai.shortcut-findbar";
+    static SHORTCUT_URLBAR = "extension.browse-bot.urlbar-ai.shortcut-urlbar";
+    static SHORTCUT_LIBRARY = "extension.browse-bot.library-ai.shortcut-library";
+    static LIBRARY_ENABLED = "extension.browse-bot.library-ai.enabled";
+    static LIBRARY_MODE = "extension.browse-bot.library-ai.mode";
+    static URLBAR_AI_ENABLED = "extension.browse-bot.urlbar-ai-enabled";
+    static URLBAR_AI_HIDE_SUGGESTIONS = "extension.browse-bot.urlbar-ai.hide-suggestions";
+    static URLBAR_AI_ANIMATIONS_ENABLED = "extension.browse-bot.urlbar-ai.animations-enabled";
+    static LLM_PROVIDER = "extension.browse-bot.llm-provider";
+    static MISTRAL_API_KEY = "extension.browse-bot.mistral-api-key";
+    static MISTRAL_MODEL = "extension.browse-bot.mistral-model";
+    static GEMINI_API_KEY = "extension.browse-bot.gemini-api-key";
+    static GEMINI_MODEL = "extension.browse-bot.gemini-model";
+    static OPENAI_API_KEY = "extension.browse-bot.openai-api-key";
+    static OPENAI_MODEL = "extension.browse-bot.openai-model";
+    static CLAUDE_API_KEY = "extension.browse-bot.claude-api-key";
+    static CLAUDE_MODEL = "extension.browse-bot.claude-model";
+    static GROK_API_KEY = "extension.browse-bot.grok-api-key";
+    static GROK_MODEL = "extension.browse-bot.grok-model";
+    static PERPLEXITY_API_KEY = "extension.browse-bot.perplexity-api-key";
+    static PERPLEXITY_MODEL = "extension.browse-bot.perplexity-model";
+    static CEREBRAS_API_KEY = "extension.browse-bot.cerebras-api-key";
+    static CEREBRAS_MODEL = "extension.browse-bot.cerebras-model";
+    static DEEPSEEK_API_KEY = "extension.browse-bot.deepseek-api-key";
+    static DEEPSEEK_MODEL = "extension.browse-bot.deepseek-model";
+    static OPENROUTER_API_KEY = "extension.browse-bot.openrouter-api-key";
+    static OPENROUTER_MODEL = "extension.browse-bot.openrouter-model";
+    static POLLINATIONS_API_KEY = "extension.browse-bot.pollinations-api-key";
+    static POLLINATIONS_MODEL = "extension.browse-bot.pollinations-model";
+    static OLLAMA_MODEL = "extension.browse-bot.ollama-model";
+    static OLLAMA_BASE_URL = "extension.browse-bot.ollama-base-url";
+    static CUSTOM_API_KEY = "extension.browse-bot.custom-api-key";
+    static CUSTOM_MODEL = "extension.browse-bot.custom-model";
+    static CUSTOM_BASE_URL = "extension.browse-bot.custom-base-url";
+    static LLM_TEMPERATURE = "extension.browse-bot.llm.temperature";
+    static LLM_TOP_P = "extension.browse-bot.llm.top-p";
+    static LLM_TOP_K = "extension.browse-bot.llm.top-k";
+    static LLM_FREQUENCY_PENALTY = "extension.browse-bot.llm.frequency-penalty";
+    static LLM_PRESENCE_PENALTY = "extension.browse-bot.llm.presence-penalty";
+    static LLM_MAX_OUTPUT_TOKENS = "extension.browse-bot.llm.max-output-tokens";
+    static defaultValues = {
+      [BrowseBotPREFS.ENABLED]: !0,
+      [BrowseBotPREFS.URLBAR_AI_ENABLED]: !0,
+      [BrowseBotPREFS.URLBAR_AI_HIDE_SUGGESTIONS]: !0,
+      [BrowseBotPREFS.URLBAR_AI_ANIMATIONS_ENABLED]: !0,
+      [BrowseBotPREFS.MINIMAL]: !0,
+      [BrowseBotPREFS.DEBUG_MODE]: !1,
+      [BrowseBotPREFS.PERSIST]: !1,
+      [BrowseBotPREFS.STREAM_ENABLED]: !0,
+      [BrowseBotPREFS.CITATIONS_ENABLED]: !1,
+      [BrowseBotPREFS.CONTEXT_MENU_ENABLED]: !0,
+      [BrowseBotPREFS.CONTEXT_MENU_AUTOSEND]: !0,
+      [BrowseBotPREFS.CONTEXT_MENU_COMMAND_NO_SELECTION]: "Summarize current page",
+      [BrowseBotPREFS.CONTEXT_MENU_COMMAND_WITH_SELECTION]: `Explain this in context of current page:
 
 {selection}`,
-    [BrowseBotPREFS.LLM_PROVIDER]: "gemini",
-    [BrowseBotPREFS.MISTRAL_API_KEY]: "",
-    [BrowseBotPREFS.MISTRAL_MODEL]: "mistral-medium-latest",
-    [BrowseBotPREFS.GEMINI_API_KEY]: "",
-    [BrowseBotPREFS.GEMINI_MODEL]: "gemini-2.5-flash",
-    [BrowseBotPREFS.OPENAI_API_KEY]: "",
-    [BrowseBotPREFS.OPENAI_MODEL]: "gpt-5.2",
-    [BrowseBotPREFS.CLAUDE_API_KEY]: "",
-    [BrowseBotPREFS.CLAUDE_MODEL]: "claude-4-opus",
-    [BrowseBotPREFS.GROK_API_KEY]: "",
-    [BrowseBotPREFS.GROK_MODEL]: "grok-4",
-    [BrowseBotPREFS.PERPLEXITY_API_KEY]: "",
-    [BrowseBotPREFS.PERPLEXITY_MODEL]: "sonar",
-    [BrowseBotPREFS.CEREBRAS_API_KEY]: "",
-    [BrowseBotPREFS.CEREBRAS_MODEL]: "llama3.1-8b",
-    [BrowseBotPREFS.OLLAMA_MODEL]: "llama2",
-    [BrowseBotPREFS.OLLAMA_BASE_URL]: "http://localhost:11434/api",
-    [BrowseBotPREFS.CUSTOM_API_KEY]: "",
-    [BrowseBotPREFS.CUSTOM_MODEL]: "",
-    [BrowseBotPREFS.CUSTOM_BASE_URL]: "",
-    [BrowseBotPREFS.DND_ENABLED]: !0,
-    [BrowseBotPREFS.POSITION]: "top-right",
-    [BrowseBotPREFS.REMEMBER_DIMENSIONS]: !0,
-    [BrowseBotPREFS.WIDTH]: 500,
-    [BrowseBotPREFS.MAX_TOOL_CALLS]: 5,
-    [BrowseBotPREFS.CONFORMATION]: !0,
-    [BrowseBotPREFS.BACKGROUND_STYLE]: "solid",
-    [BrowseBotPREFS.SHORTCUT_FINDBAR]: "ctrl+shift+f",
-    [BrowseBotPREFS.SHORTCUT_URLBAR]: "ctrl+space",
-    [BrowseBotPREFS.CUSTOM_SYSTEM_PROMPT]: "",
-    [BrowseBotPREFS.LLM_TEMPERATURE]: 0.7,
-    [BrowseBotPREFS.LLM_TOP_P]: 1,
-    [BrowseBotPREFS.LLM_TOP_K]: 40,
-    [BrowseBotPREFS.LLM_FREQUENCY_PENALTY]: 0,
-    [BrowseBotPREFS.LLM_PRESENCE_PENALTY]: 0,
-    [BrowseBotPREFS.LLM_MAX_OUTPUT_TOKENS]: 2048
-  };
-  setInitialPrefs() {
-    this.migratePrefs(), super.setInitialPrefs();
-  }
-  static migratePrefs() {
-    let migrationMap = {
-      "extension.browse-bot.enabled": this.ENABLED,
-      "extension.browse-bot.minimal": this.MINIMAL,
-      "extension.browse-bot.persist-chat": this.PERSIST,
-      "extension.browse-bot.dnd-enabled": this.DND_ENABLED,
-      "extension.browse-bot.position": this.POSITION,
-      "extension.browse-bot.stream-enabled": this.STREAM_ENABLED,
-      "extension.browse-bot.god-mode": this.AGENTIC_MODE,
-      "extension.browse-bot.findbar-god-mode": this.AGENTIC_MODE,
-      "extension.browse-bot.citations-enabled": this.CITATIONS_ENABLED,
-      "extension.browse-bot.max-tool-calls": this.MAX_TOOL_CALLS,
-      "extension.browse-bot.conform-before-tool-call": this.CONFORMATION,
-      "extension.browse-bot.context-menu-enabled": this.CONTEXT_MENU_ENABLED,
-      "extension.browse-bot.context-menu-autosend": this.CONTEXT_MENU_AUTOSEND
+      [BrowseBotPREFS.LLM_PROVIDER]: "pollinations",
+      [BrowseBotPREFS.MISTRAL_API_KEY]: "",
+      [BrowseBotPREFS.MISTRAL_MODEL]: "mistral-medium-latest",
+      [BrowseBotPREFS.GEMINI_API_KEY]: "",
+      [BrowseBotPREFS.GEMINI_MODEL]: "gemini-3.8-flash",
+      [BrowseBotPREFS.OPENAI_API_KEY]: "",
+      [BrowseBotPREFS.OPENAI_MODEL]: "gpt-6.1-sol",
+      [BrowseBotPREFS.CLAUDE_API_KEY]: "",
+      [BrowseBotPREFS.CLAUDE_MODEL]: "claude-sonnet-5-5",
+      [BrowseBotPREFS.GROK_API_KEY]: "",
+      [BrowseBotPREFS.GROK_MODEL]: "grok-4.7",
+      [BrowseBotPREFS.PERPLEXITY_API_KEY]: "",
+      [BrowseBotPREFS.PERPLEXITY_MODEL]: "sonar",
+      [BrowseBotPREFS.CEREBRAS_API_KEY]: "",
+      [BrowseBotPREFS.CEREBRAS_MODEL]: "gpt-oss-120b",
+      [BrowseBotPREFS.DEEPSEEK_API_KEY]: "",
+      [BrowseBotPREFS.DEEPSEEK_MODEL]: "deepseek-flash",
+      [BrowseBotPREFS.OPENROUTER_API_KEY]: "",
+      [BrowseBotPREFS.OPENROUTER_MODEL]: "google/gemini-3.8-flash",
+      [BrowseBotPREFS.POLLINATIONS_API_KEY]: "",
+      [BrowseBotPREFS.POLLINATIONS_MODEL]: "openai",
+      [BrowseBotPREFS.OLLAMA_MODEL]: "qwen3:8b",
+      [BrowseBotPREFS.OLLAMA_BASE_URL]: "http://localhost:11434/api",
+      [BrowseBotPREFS.CUSTOM_API_KEY]: "",
+      [BrowseBotPREFS.CUSTOM_MODEL]: "",
+      [BrowseBotPREFS.CUSTOM_BASE_URL]: "",
+      [BrowseBotPREFS.DND_ENABLED]: !0,
+      [BrowseBotPREFS.POSITION]: "top-right",
+      [BrowseBotPREFS.REMEMBER_DIMENSIONS]: !0,
+      [BrowseBotPREFS.WIDTH]: 500,
+      [BrowseBotPREFS.MAX_TOOL_CALLS]: 0,
+      [BrowseBotPREFS.MAX_CONTEXT_CHARS]: 0,
+      [BrowseBotPREFS.CONFIRMATION]: !0,
+      [BrowseBotPREFS.BACKGROUND_STYLE]: "solid",
+      [BrowseBotPREFS.SHORTCUT_FINDBAR]: "ctrl+shift+f",
+      [BrowseBotPREFS.SHORTCUT_URLBAR]: "ctrl+space",
+      [BrowseBotPREFS.SHORTCUT_LIBRARY]: "alt+shift+a",
+      [BrowseBotPREFS.LIBRARY_ENABLED]: !0,
+      [BrowseBotPREFS.LIBRARY_MODE]: "chat",
+      [BrowseBotPREFS.FINDBAR_SYSTEM_PROMPT]: "",
+      [BrowseBotPREFS.URLBAR_SYSTEM_PROMPT]: "",
+      [BrowseBotPREFS.LIBRARY_CHAT_SYSTEM_PROMPT]: "",
+      [BrowseBotPREFS.LIBRARY_AGENT_SYSTEM_PROMPT]: "",
+      [BrowseBotPREFS.LIBRARY_BUILD_SYSTEM_PROMPT]: "",
+      [BrowseBotPREFS.LLM_TEMPERATURE]: 0.7,
+      [BrowseBotPREFS.LLM_TOP_P]: 1,
+      [BrowseBotPREFS.LLM_TOP_K]: 40,
+      [BrowseBotPREFS.LLM_FREQUENCY_PENALTY]: 0,
+      [BrowseBotPREFS.LLM_PRESENCE_PENALTY]: 0,
+      [BrowseBotPREFS.LLM_MAX_OUTPUT_TOKENS]: 2048
     };
-    for (let [oldKey, newKey] of Object.entries(migrationMap))
+    setInitialPrefs() {
+      this.migratePrefs(), super.setInitialPrefs();
+    }
+    static migratePrefs() {
       try {
-        let oldPref = this.getPref(oldKey);
-        if (oldPref != null) {
-          let value = oldPref;
-          this.debugLog(`Migrating pref ${oldKey} to ${newKey} with value: ${value}`), this.setPref(newKey, value), resetPref(oldPref);
-        }
+        let legacy = this.getPref("extension.browse-bot.custom-system-prompt");
+        if (typeof legacy === "string" && legacy.trim() && !this.getPref(this.FINDBAR_SYSTEM_PROMPT))
+          this.debugLog("Migrating legacy custom system prompt to the findbar prompt."), this.setPref(this.FINDBAR_SYSTEM_PROMPT, legacy);
+        resetPref("extension.browse-bot.custom-system-prompt");
       } catch (e) {
-        this.debugError(`Could not migrate pref ${oldKey}:`, e);
+        this.debugError("Could not migrate legacy custom system prompt:", e);
       }
-  }
-  static get enabled() {
-    return this.getPref(this.ENABLED);
-  }
-  static set enabled(value) {
-    this.setPref(this.ENABLED, value);
-  }
-  static get minimal() {
-    return this.getPref(this.MINIMAL);
-  }
-  static set minimal(value) {
-    this.setPref(this.MINIMAL, value);
-  }
-  static get streamEnabled() {
-    return this.getPref(this.STREAM_ENABLED);
-  }
-  static set streamEnabled(value) {
-    this.setPref(this.STREAM_ENABLED, value);
-  }
-  static set agenticMode(value) {
-    this.setPref(this.AGENTIC_MODE, value);
-  }
-  static get agenticMode() {
-    return this.getPref(this.AGENTIC_MODE);
-  }
-  static get citationsEnabled() {
-    return this.getPref(this.CITATIONS_ENABLED);
-  }
-  static set citationsEnabled(value) {
-    this.setPref(this.CITATIONS_ENABLED, value);
-  }
-  static get contextMenuEnabled() {
-    return this.getPref(this.CONTEXT_MENU_ENABLED);
-  }
-  static set contextMenuEnabled(value) {
-    this.setPref(this.CONTEXT_MENU_ENABLED, value);
-  }
-  static get contextMenuAutoSend() {
-    return this.getPref(this.CONTEXT_MENU_AUTOSEND);
-  }
-  static set contextMenuAutoSend(value) {
-    this.setPref(this.CONTEXT_MENU_AUTOSEND, value);
-  }
-  static get contextMenuCommandWithSelection() {
-    return this.getPref(this.CONTEXT_MENU_COMMAND_WITH_SELECTION);
-  }
-  static set contextMenuCommandWithSelection(value) {
-    this.setPref(this.CONTEXT_MENU_COMMAND_WITH_SELECTION, value);
-  }
-  static get contextMenuCommandNoSelection() {
-    return this.getPref(this.CONTEXT_MENU_COMMAND_NO_SELECTION);
-  }
-  static set contextMenuCommandNoSelection(value) {
-    this.setPref(this.CONTEXT_MENU_COMMAND_NO_SELECTION, value);
-  }
-  static get llmProvider() {
-    return this.getPref(this.LLM_PROVIDER);
-  }
-  static set llmProvider(value) {
-    this.setPref(this.LLM_PROVIDER, value);
-  }
-  static get persistChat() {
-    return this.getPref(this.PERSIST);
-  }
-  static set persistChat(value) {
-    this.setPref(this.PERSIST, value);
-  }
-  static get backgroundStyle() {
-    return this.getPref(this.BACKGROUND_STYLE);
-  }
-  static get pseudoBg() {
-    return this.backgroundStyle === "pseudo";
-  }
-  static get maxToolCalls() {
-    return this.getPref(this.MAX_TOOL_CALLS);
-  }
-  static set maxToolCalls(value) {
-    this.setPref(this.MAX_TOOL_CALLS, value);
-  }
-  static get conformation() {
-    return this.getPref(this.CONFORMATION);
-  }
-  static set conformation(value) {
-    this.setPref(this.CONFORMATION, value);
-  }
-  static get dndEnabled() {
-    return this.getPref(this.DND_ENABLED);
-  }
-  static set dndEnabled(value) {
-    this.setPref(this.DND_ENABLED, value);
-  }
-  static get position() {
-    return this.getPref(this.POSITION);
-  }
-  static set position(value) {
-    this.setPref(this.POSITION, value);
-  }
-  static get rememberDimensions() {
-    return this.getPref(this.REMEMBER_DIMENSIONS);
-  }
-  static set rememberDimensions(value) {
-    this.setPref(this.REMEMBER_DIMENSIONS, value);
-  }
-  static get width() {
-    return this.getPref(this.WIDTH);
-  }
-  static set width(value) {
-    this.setPref(this.WIDTH, value);
-  }
-  static get ollamaBaseUrl() {
-    return this.getPref(this.OLLAMA_BASE_URL);
-  }
-  static set ollamaBaseUrl(value) {
-    this.setPref(this.OLLAMA_BASE_URL, value);
-  }
-  static get llmTemperature() {
-    return this.getPref(this.LLM_TEMPERATURE);
-  }
-  static set llmTemperature(value) {
-    this.setPref(this.LLM_TEMPERATURE, value);
-  }
-  static get llmTopP() {
-    return this.getPref(this.LLM_TOP_P);
-  }
-  static set llmTopP(value) {
-    this.setPref(this.LLM_TOP_P, value);
-  }
-  static get llmTopK() {
-    return this.getPref(this.LLM_TOP_K);
-  }
-  static set llmTopK(value) {
-    this.setPref(this.LLM_TOP_K, value);
-  }
-  static get llmFrequencyPenalty() {
-    return this.getPref(this.LLM_FREQUENCY_PENALTY);
-  }
-  static set llmFrequencyPenalty(value) {
-    this.setPref(this.LLM_FREQUENCY_PENALTY, value);
-  }
-  static get llmPresencePenalty() {
-    return this.getPref(this.LLM_PRESENCE_PENALTY);
-  }
-  static set llmPresencePenalty(value) {
-    this.setPref(this.LLM_PRESENCE_PENALTY, value);
-  }
-  static get llmMaxOutputTokens() {
-    return this.getPref(this.LLM_MAX_OUTPUT_TOKENS);
-  }
-  static set llmMaxOutputTokens(value) {
-    this.setPref(this.LLM_MAX_OUTPUT_TOKENS, value);
-  }
-  static get shortcutFindbar() {
-    return this.getPref(this.SHORTCUT_FINDBAR);
-  }
-  static set shortcutFindbar(value) {
-    this.setPref(this.SHORTCUT_FINDBAR, value);
-  }
-  static get shortcutUrlbar() {
-    return this.getPref(this.SHORTCUT_URLBAR);
-  }
-  static set shortcutUrlbar(value) {
-    this.setPref(this.SHORTCUT_URLBAR, value);
-  }
-  static get customSystemPrompt() {
-    return this.getPref(this.CUSTOM_SYSTEM_PROMPT);
-  }
-  static set customSystemPrompt(value) {
-    this.setPref(this.CUSTOM_SYSTEM_PROMPT, value);
-  }
-}
-var PREFS2 = BrowseBotPREFS, prefs_default = PREFS2;
+    }
+    static get enabled() {
+      return this.getPref(this.ENABLED);
+    }
+    static set enabled(value) {
+      this.setPref(this.ENABLED, value);
+    }
+    static get minimal() {
+      return this.getPref(this.MINIMAL);
+    }
+    static set minimal(value) {
+      this.setPref(this.MINIMAL, value);
+    }
+    static get streamEnabled() {
+      return this.getPref(this.STREAM_ENABLED);
+    }
+    static set streamEnabled(value) {
+      this.setPref(this.STREAM_ENABLED, value);
+    }
+    static get citationsEnabled() {
+      return this.getPref(this.CITATIONS_ENABLED);
+    }
+    static set citationsEnabled(value) {
+      this.setPref(this.CITATIONS_ENABLED, value);
+    }
+    static get contextMenuEnabled() {
+      return this.getPref(this.CONTEXT_MENU_ENABLED);
+    }
+    static set contextMenuEnabled(value) {
+      this.setPref(this.CONTEXT_MENU_ENABLED, value);
+    }
+    static get contextMenuAutoSend() {
+      return this.getPref(this.CONTEXT_MENU_AUTOSEND);
+    }
+    static set contextMenuAutoSend(value) {
+      this.setPref(this.CONTEXT_MENU_AUTOSEND, value);
+    }
+    static get contextMenuCommandWithSelection() {
+      return this.getPref(this.CONTEXT_MENU_COMMAND_WITH_SELECTION);
+    }
+    static set contextMenuCommandWithSelection(value) {
+      this.setPref(this.CONTEXT_MENU_COMMAND_WITH_SELECTION, value);
+    }
+    static get contextMenuCommandNoSelection() {
+      return this.getPref(this.CONTEXT_MENU_COMMAND_NO_SELECTION);
+    }
+    static set contextMenuCommandNoSelection(value) {
+      this.setPref(this.CONTEXT_MENU_COMMAND_NO_SELECTION, value);
+    }
+    static get llmProvider() {
+      return this.getPref(this.LLM_PROVIDER);
+    }
+    static set llmProvider(value) {
+      this.setPref(this.LLM_PROVIDER, value);
+    }
+    static get persistChat() {
+      return this.getPref(this.PERSIST);
+    }
+    static set persistChat(value) {
+      this.setPref(this.PERSIST, value);
+    }
+    static get backgroundStyle() {
+      return this.getPref(this.BACKGROUND_STYLE);
+    }
+    static get pseudoBg() {
+      return this.backgroundStyle === "pseudo";
+    }
+    static get maxToolCalls() {
+      return this.getPref(this.MAX_TOOL_CALLS);
+    }
+    static set maxToolCalls(value) {
+      this.setPref(this.MAX_TOOL_CALLS, value);
+    }
+    static get confirmation() {
+      return this.getPref(this.CONFIRMATION);
+    }
+    static set confirmation(value) {
+      this.setPref(this.CONFIRMATION, value);
+    }
+    static get dndEnabled() {
+      return this.getPref(this.DND_ENABLED);
+    }
+    static set dndEnabled(value) {
+      this.setPref(this.DND_ENABLED, value);
+    }
+    static get position() {
+      return this.getPref(this.POSITION);
+    }
+    static set position(value) {
+      this.setPref(this.POSITION, value);
+    }
+    static get rememberDimensions() {
+      return this.getPref(this.REMEMBER_DIMENSIONS);
+    }
+    static set rememberDimensions(value) {
+      this.setPref(this.REMEMBER_DIMENSIONS, value);
+    }
+    static get width() {
+      return this.getPref(this.WIDTH);
+    }
+    static set width(value) {
+      this.setPref(this.WIDTH, value);
+    }
+    static get ollamaBaseUrl() {
+      return this.getPref(this.OLLAMA_BASE_URL);
+    }
+    static set ollamaBaseUrl(value) {
+      this.setPref(this.OLLAMA_BASE_URL, value);
+    }
+    static get llmTemperature() {
+      return this.getPref(this.LLM_TEMPERATURE);
+    }
+    static set llmTemperature(value) {
+      this.setPref(this.LLM_TEMPERATURE, value);
+    }
+    static get llmTopP() {
+      return this.getPref(this.LLM_TOP_P);
+    }
+    static set llmTopP(value) {
+      this.setPref(this.LLM_TOP_P, value);
+    }
+    static get llmTopK() {
+      return this.getPref(this.LLM_TOP_K);
+    }
+    static set llmTopK(value) {
+      this.setPref(this.LLM_TOP_K, value);
+    }
+    static get llmFrequencyPenalty() {
+      return this.getPref(this.LLM_FREQUENCY_PENALTY);
+    }
+    static set llmFrequencyPenalty(value) {
+      this.setPref(this.LLM_FREQUENCY_PENALTY, value);
+    }
+    static get llmPresencePenalty() {
+      return this.getPref(this.LLM_PRESENCE_PENALTY);
+    }
+    static set llmPresencePenalty(value) {
+      this.setPref(this.LLM_PRESENCE_PENALTY, value);
+    }
+    static get llmMaxOutputTokens() {
+      return this.getPref(this.LLM_MAX_OUTPUT_TOKENS);
+    }
+    static set llmMaxOutputTokens(value) {
+      this.setPref(this.LLM_MAX_OUTPUT_TOKENS, value);
+    }
+    static get shortcutFindbar() {
+      return this.getPref(this.SHORTCUT_FINDBAR);
+    }
+    static set shortcutFindbar(value) {
+      this.setPref(this.SHORTCUT_FINDBAR, value);
+    }
+    static get shortcutUrlbar() {
+      return this.getPref(this.SHORTCUT_URLBAR);
+    }
+    static set shortcutUrlbar(value) {
+      this.setPref(this.SHORTCUT_URLBAR, value);
+    }
+    static get libraryEnabled() {
+      return this.getPref(this.LIBRARY_ENABLED);
+    }
+    static set libraryEnabled(value) {
+      this.setPref(this.LIBRARY_ENABLED, value);
+    }
+    static get libraryMode() {
+      let mode = this.getPref(this.LIBRARY_MODE);
+      return mode === "agent" || mode === "build" ? mode : "chat";
+    }
+    static set libraryMode(value) {
+      if (value === "agent" || value === "build")
+        this.setPref(this.LIBRARY_MODE, value);
+      else
+        this.setPref(this.LIBRARY_MODE, "chat");
+    }
+    static get shortcutLibrary() {
+      return this.getPref(this.SHORTCUT_LIBRARY);
+    }
+    static set shortcutLibrary(value) {
+      this.setPref(this.SHORTCUT_LIBRARY, value);
+    }
+    static get findbarSystemPrompt() {
+      return this.getPref(this.FINDBAR_SYSTEM_PROMPT);
+    }
+    static set findbarSystemPrompt(value) {
+      this.setPref(this.FINDBAR_SYSTEM_PROMPT, value);
+    }
+    static get urlbarSystemPrompt() {
+      return this.getPref(this.URLBAR_SYSTEM_PROMPT);
+    }
+    static set urlbarSystemPrompt(value) {
+      this.setPref(this.URLBAR_SYSTEM_PROMPT, value);
+    }
+    static get libraryChatSystemPrompt() {
+      return this.getPref(this.LIBRARY_CHAT_SYSTEM_PROMPT);
+    }
+    static set libraryChatSystemPrompt(value) {
+      this.setPref(this.LIBRARY_CHAT_SYSTEM_PROMPT, value);
+    }
+    static get libraryAgentSystemPrompt() {
+      return this.getPref(this.LIBRARY_AGENT_SYSTEM_PROMPT);
+    }
+    static set libraryAgentSystemPrompt(value) {
+      this.setPref(this.LIBRARY_AGENT_SYSTEM_PROMPT, value);
+    }
+    static get libraryBuildSystemPrompt() {
+      return this.getPref(this.LIBRARY_BUILD_SYSTEM_PROMPT);
+    }
+    static set libraryBuildSystemPrompt(value) {
+      this.setPref(this.LIBRARY_BUILD_SYSTEM_PROMPT, value);
+    }
+    static librarySystemPromptFor(mode) {
+      if (mode === "agent")
+        return this.libraryAgentSystemPrompt;
+      if (mode === "build")
+        return this.libraryBuildSystemPrompt;
+      return this.libraryChatSystemPrompt;
+    }
+    static migratePref(newKey, oldKey, oldDefault) {
+      try {
+        if (Services.prefs.getPrefType(newKey) !== 0)
+          return;
+        if (Services.prefs.getPrefType(oldKey) === 0)
+          return;
+        let type = Services.prefs.getPrefType(oldKey), value = null;
+        if (type === Services.prefs.PREF_BOOL)
+          value = Services.prefs.getBoolPref(oldKey);
+        else if (type === Services.prefs.PREF_INT)
+          value = Services.prefs.getIntPref(oldKey);
+        else if (type === Services.prefs.PREF_STRING)
+          value = Services.prefs.getStringPref(oldKey);
+        else
+          return;
+        if (value !== oldDefault)
+          this.setPref(newKey, value);
+        Services.prefs.clearUserPref(oldKey);
+      } catch {}
+    }
+    static setInitialPrefs() {
+      this.migratePref(this.MAX_TOOL_CALLS, "extension.browse-bot.findbar-ai.max-tool-calls", 5), this.migratePref(this.CONFIRMATION, "extension.browse-bot.library-ai.conform-before-tool-call", !0), this.migratePref(this.CONFIRMATION, "extension.browse-bot.findbar-ai.conform-before-tool-call", !0), super.setInitialPrefs();
+    }
+  };
+  PREFS2 = BrowseBotPREFS, prefs_default = PREFS2;
+});
 
 // findbar-ai/messageManager.js
 async function frameScript() {
@@ -467,33 +561,58 @@ async function frameScript() {
         });
       });
     }
-    if (!doc.querySelector("ytd-transcript-renderer")) {
-      let button = doc.querySelector('button[aria-label="Show transcript"]');
-      if (!button)
-        throw Error('"Show transcript" button not found — transcript may not be available.');
-      button.click(), await waitForSelectorWithObserver("ytd-transcript-renderer", 5000);
-    }
-    await waitForSelectorWithObserver("ytd-transcript-segment-renderer .segment-text", 5000);
-    let segments = Array.from(doc.querySelectorAll("ytd-transcript-segment-renderer .segment-text"));
-    if (!segments.length)
-      throw Error("Transcript segments found, but all are empty.");
-    return segments.map((el) => el.textContent.trim()).filter(Boolean).join(`
+    let segmentSelector = "transcript-segment-view-model, ytd-transcript-segment-renderer .segment-text", buttons = Array.from(doc.querySelectorAll('button[aria-label="Show transcript"]')), button = buttons.find((b) => b.offsetParent !== null) || buttons[0];
+    if (button)
+      try {
+        button.click();
+      } catch {}
+    else if (!doc.querySelector("ytd-transcript-renderer") && !doc.querySelector(segmentSelector))
+      throw Error('"Show transcript" button not found. Transcript may not be available.');
+    await waitForSelectorWithObserver(segmentSelector, 8000);
+    let transcript = (() => {
+      let modern = Array.from(doc.querySelectorAll("transcript-segment-view-model")).map((seg) => {
+        let time = seg.querySelector(".ytwTranscriptSegmentViewModelTimestamp")?.textContent.trim() || "", text = seg.querySelector('span[role="text"]')?.textContent.trim().replace(/\s+/g, " ") || "";
+        if (!text)
+          return "";
+        return time ? `[${time}] ${text}` : text;
+      }).filter(Boolean).join(`
 `);
+      if (modern)
+        return modern;
+      return Array.from(doc.querySelectorAll("ytd-transcript-segment-renderer")).map((row) => {
+        let text = row.querySelector(".segment-text")?.textContent.trim() || "", time = row.querySelector(".segment-timestamp")?.textContent.trim() || "";
+        if (!text)
+          return "";
+        return time ? `[${time}] ${text}` : text;
+      }).filter(Boolean).join(`
+`);
+    })();
+    if (!transcript)
+      throw Error("Transcript segments found, but all are empty.");
+    return transcript;
   }
   let getYoutubeDescription = async () => {
     let descriptionContainer = content.document.querySelector("#description-inline-expander");
     if (descriptionContainer) {
       let expandButton = descriptionContainer.querySelector("#expand") || descriptionContainer.querySelector("#expand-button") || descriptionContainer.querySelector("tp-yt-paper-button#more");
       if (expandButton && expandButton.offsetParent !== null)
-        expandButton.click(), await new Promise((resolve) => setTimeout(resolve, 0));
+        expandButton.click(), await new Promise((resolve) => content.setTimeout(resolve, 0));
     }
-    let desc = content.document.querySelector("#description-inline-expander .yt-core-attributed-string, #description .content, .ytd-expandable-video-description-body-renderer .yt-core-attributed-string");
-    return desc ? desc.textContent.trim() : "Description not found.";
-  }, getYoutubeComments = (count = 10) => {
-    let comments = Array.from(content.document.querySelectorAll("ytd-comment-thread-renderer #content-text")).slice(0, count);
-    if (comments.length === 0)
-      return ["No comments found or they are not loaded yet."];
-    return comments.map((c) => c.textContent.trim());
+    let selectors = [
+      "#description-inline-expander .yt-core-attributed-string",
+      "#description-inline-expander yt-attributed-string",
+      "#description-item .yt-core-attributed-string",
+      "#description-item yt-attributed-string",
+      "#description .content",
+      ".ytd-expandable-video-description-body-renderer .yt-core-attributed-string",
+      "ytd-expander#description yt-attributed-string"
+    ];
+    for (let selector of selectors) {
+      let text = content.document.querySelector(selector)?.textContent.trim();
+      if (text)
+        return text;
+    }
+    throw Error("No YouTube description found. This page may not be a YouTube video, or the description is empty.");
   }, handlers = {
     GetPageHTMLContent: () => ({
       content: extractRelevantContent(),
@@ -522,84 +641,789 @@ async function frameScript() {
       let element = content.document.querySelector(selector);
       if (!element)
         throw Error(`Element with selector "${selector}" not found.`);
-      return element.value = value, element.dispatchEvent(new Event("input", { bubbles: !0 })), {
+      if (!("value" in element))
+        throw Error(`Element with selector "${selector}" is not an input element (<${element.tagName.toLowerCase()}>). Use a selector for an input, textarea, or select element.`);
+      try {
+        element.focus();
+      } catch {}
+      return element.value = value, element.dispatchEvent(new Event("input", { bubbles: !0 })), element.dispatchEvent(new Event("change", { bubbles: !0 })), {
         result: `Filled element with selector "${selector}" with value "${value}".`
       };
     },
+    SeekVideo: ({ seconds }) => {
+      let video = content.document.querySelector("video");
+      if (!video)
+        throw Error("No video element found on this page.");
+      return video.currentTime = Math.max(0, Number(seconds) || 0), video.scrollIntoView({ block: "center" }), { result: `Seeked to ${seconds}s.` };
+    },
     GetYoutubeTranscript: async () => ({ transcript: await getYouTubeTranscript() }),
-    GetYoutubeDescription: async () => ({ description: await getYoutubeDescription() }),
-    GetYoutubeComments: ({ count }) => ({ comments: getYoutubeComments(count) })
+    GetYoutubeDescription: async () => ({ description: await getYoutubeDescription() })
   };
   addMessageListener("FindbarAI:Command", async function(msg) {
-    let cmd = msg.data.command, data = msg.data.data || {};
+    let cmd = msg.data.command, data = msg.data.data || {}, requestId = msg.data.requestId;
     try {
       let result = await handlers[cmd](data);
-      sendAsyncMessage("FindbarAI:Result", { command: cmd, result });
+      sendAsyncMessage("FindbarAI:Result", { command: cmd, requestId, result });
     } catch (e) {
-      sendAsyncMessage("FindbarAI:Result", { command: cmd, result: { error: e.message } });
+      sendAsyncMessage("FindbarAI:Result", {
+        command: cmd,
+        requestId,
+        result: { error: e.message }
+      });
     }
   });
 }
-var currentMessageManager = null, updateMessageManager = () => {
-  if (gBrowser && gBrowser.selectedBrowser) {
-    let mm = gBrowser.selectedBrowser.messageManager;
-    if (mm !== currentMessageManager) {
-      if (currentMessageManager = mm, !gBrowser.selectedBrowser._findbarAIInjected) {
-        let scriptText = `(${frameScript})();`;
-        mm.loadFrameScript("data:application/javascript;charset=utf-8," + encodeURIComponent(scriptText), !1), gBrowser.selectedBrowser._findbarAIInjected = !0;
+function isYouTubeWatchUrl(url) {
+  if (!url)
+    return !1;
+  try {
+    let u = new URL(String(url).trim()), host = u.hostname.replace(/^www\./, "").replace(/^m\./, "").replace(/^music\./, "");
+    if (host === "youtu.be")
+      return u.pathname.slice(1).split("/")[0].length > 0;
+    if (host === "youtube.com" || host === "youtube-nocookie.com") {
+      if (u.pathname === "/watch")
+        return !!u.searchParams.get("v");
+      return /^\/(embed|shorts|live|v)\/[^/?]+/.test(u.pathname);
+    }
+  } catch {
+    return !1;
+  }
+  return !1;
+}
+function pickOpts(...args) {
+  for (let a of args)
+    if (a && typeof a === "object" && (("signal" in a) || ("timeout" in a)))
+      return a;
+  return;
+}
+var frameScriptText, frameScriptURL, ensureFrameScript = (browser) => {
+  if (!browser?.messageManager || browser._findbarAIInjected)
+    return;
+  browser.messageManager.loadFrameScript(frameScriptURL, !1), browser._findbarAIInjected = !0;
+}, requestCounter = 0, sendToBrowser = (browser, cmd, data = {}, opts = {}) => {
+  let { timeout = 15000, signal } = opts || {};
+  ensureFrameScript(browser);
+  let mm = browser.messageManager;
+  if (!mm)
+    return Promise.reject(Error("No message manager available."));
+  if (signal?.aborted)
+    return Promise.reject(new DOMException("Aborted", "AbortError"));
+  let requestId = `${Date.now().toString(36)}-${requestCounter++}`;
+  return new Promise((resolve, reject) => {
+    let settled = !1, cleanup = () => {
+      mm.removeMessageListener("FindbarAI:Result", listener), clearTimeout(timer), signal?.removeEventListener("abort", onAbort);
+    }, settle = (fn, val) => {
+      if (settled)
+        return;
+      settled = !0, cleanup(), fn(val);
+    }, onAbort = () => settle(reject, new DOMException("Aborted", "AbortError")), timer = setTimeout(() => {
+      settle(reject, Error(`Timed out waiting for a page response (${cmd}, ${timeout}ms). The tab may be unloaded, still loading, or on a page that blocks content scripts.`));
+    }, timeout), listener = (msg) => {
+      let d = msg.data || {};
+      if (d.requestId !== void 0 && d.requestId !== requestId)
+        return;
+      if (d.command !== cmd)
+        return;
+      if (d.result && d.result.error)
+        settle(reject, Error(d.result.error));
+      else
+        settle(resolve, d.result);
+    };
+    mm.addMessageListener("FindbarAI:Result", listener), signal?.addEventListener("abort", onAbort, { once: !0 });
+    try {
+      mm.sendAsyncMessage("FindbarAI:Command", { command: cmd, data, requestId });
+    } catch (e) {
+      settle(reject, e);
+    }
+  });
+}, messageManagerAPI;
+var init_messageManager = __esm(() => {
+  init_prefs();
+  frameScriptText = `(${frameScript})();`, frameScriptURL = "data:application/javascript;charset=utf-8," + encodeURIComponent(frameScriptText);
+  messageManagerAPI = {
+    send(cmd, data = {}, opts) {
+      if (!gBrowser || !gBrowser.selectedBrowser)
+        return PREFS2.debugError("No message manager available."), Promise.reject(Error("No message manager available."));
+      return sendToBrowser(gBrowser.selectedBrowser, cmd, data, opts);
+    },
+    async getPageTextContentForTab(tab, trimWhiteSpace = !0) {
+      let browser = tab?.linkedBrowser;
+      if (!browser?.messageManager)
+        return null;
+      try {
+        let result = await sendToBrowser(browser, "GetPageTextContent", { trimWhiteSpace });
+        return {
+          textContent: result?.textContent || "",
+          url: result?.url || browser.currentURI?.spec || "",
+          title: result?.title || tab.label || ""
+        };
+      } catch (error) {
+        return PREFS2.debugError("Failed to get page text content for tab:", error), null;
       }
+    },
+    getUrlAndTitle() {
+      return {
+        url: gBrowser.currentURI.spec,
+        title: gBrowser.selectedBrowser.contentTitle
+      };
+    },
+    async getHTMLContent(...rest) {
+      return this.send("GetPageHTMLContent", {}, pickOpts(...rest)).catch((error) => (PREFS2.debugError("Failed to get page HTML content:", error), {}));
+    },
+    async getSelectedText(...rest) {
+      return this.send("GetSelectedText", {}, pickOpts(...rest)).then((result) => {
+        if (!result || !result.hasSelection)
+          return this.getUrlAndTitle();
+        return result;
+      }).catch((error) => (PREFS2.debugError("Failed to get selected text:", error), this.getUrlAndTitle()));
+    },
+    async getPageTextContent(trimWhiteSpace = !0, ...rest) {
+      return this.send("GetPageTextContent", { trimWhiteSpace }, pickOpts(trimWhiteSpace, ...rest)).catch((error) => (PREFS2.debugError("Failed to get page text content:", error), this.getUrlAndTitle()));
+    },
+    async clickElement(selector, ...rest) {
+      return this.send("ClickElement", { selector }, pickOpts(selector, ...rest)).catch((error) => (PREFS2.debugError(`Failed to click element with selector "${selector}":`, error), { error: `Failed to click element with selector "${selector}".` }));
+    },
+    async fillForm(selector, value, ...rest) {
+      return this.send("FillForm", { selector, value }, pickOpts(selector, value, ...rest)).catch((error) => (PREFS2.debugError(`Failed to fill form with selector "${selector}":`, error), { error: `Failed to fill form with selector "${selector}".` }));
+    },
+    async seekVideo(seconds) {
+      return this.send("SeekVideo", { seconds }).catch((error) => (PREFS2.debugError(`Failed to seek video to ${seconds}s:`, error), { error: "Failed to seek video." }));
+    },
+    currentUrlIsYouTubeVideo() {
+      try {
+        return isYouTubeWatchUrl(this.getUrlAndTitle().url);
+      } catch {
+        return !1;
+      }
+    },
+    async getYoutubeTranscript(...rest) {
+      if (!this.currentUrlIsYouTubeVideo())
+        return {
+          error: "Current page is not a YouTube video. Only use this tool on youtube.com/watch pages."
+        };
+      return this.send("GetYoutubeTranscript", {}, { timeout: 25000, ...pickOpts(...rest) }).catch((error) => (PREFS2.debugError("Failed to get youtube transcript:", error), { error: `Failed to get youtube transcript: ${error.message}` }));
+    },
+    async getYoutubeDescription(...rest) {
+      if (!this.currentUrlIsYouTubeVideo())
+        return {
+          error: "Current page is not a YouTube video. Only use this tool on youtube.com/watch pages."
+        };
+      return this.send("GetYoutubeDescription", {}, pickOpts(...rest)).catch((error) => (PREFS2.debugError("Failed to get youtube description:", error), { error: `Failed to get youtube description: ${error.message}` }));
+    }
+  };
+});
+
+// findbar-ai/llm/anthropic.js
+function toAnthropicMessages(messages) {
+  let systemParts = [], out = [];
+  for (let m of messages) {
+    if (m.role === "system") {
+      systemParts.push(typeof m.content === "string" ? m.content : "");
+      continue;
+    }
+    if (m.role === "assistant") {
+      let blocks = [];
+      if (m.content)
+        blocks.push({ type: "text", text: m.content });
+      for (let call of m.tool_calls || []) {
+        let input = {};
+        try {
+          input = JSON.parse(call.function.arguments || "{}");
+        } catch {
+          input = {};
+        }
+        blocks.push({ type: "tool_use", id: call.id, name: call.function.name, input });
+      }
+      out.push({ role: "assistant", content: blocks });
+      continue;
+    }
+    if (m.role === "tool") {
+      out.push({
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: m.tool_call_id, content: String(m.content ?? "") }
+        ]
+      });
+      continue;
+    }
+    out.push({ role: "user", content: typeof m.content === "string" ? m.content : "" });
+  }
+  return { system: systemParts.join(`
+
+`), messages: out };
+}
+function buildAnthropicBody({ system, messages, tools, sampling, stream }) {
+  let { system: sys, messages: chat } = toAnthropicMessages([
+    ...system ? [{ role: "system", content: system }] : [],
+    ...messages
+  ]), body = {
+    model: sampling.model,
+    max_tokens: sampling.maxTokens,
+    stream: !!stream
+  };
+  if (sys)
+    body.system = sys;
+  if (body.messages = chat, sampling.temperature !== void 0)
+    body.temperature = sampling.temperature;
+  if (sampling.topP !== void 0)
+    body.top_p = sampling.topP;
+  if (sampling.topK !== void 0)
+    body.top_k = sampling.topK;
+  if (tools?.length)
+    body.tools = Object.entries(tools).map(([name, t]) => ({
+      name,
+      description: t.description,
+      input_schema: t.parameters
+    })), body.tool_choice = { type: "auto" };
+  return body;
+}
+function anthropicHeaders(apiKey) {
+  return {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01"
+  };
+}
+function anthropicUrl() {
+  return "https://api.anthropic.com/v1/messages";
+}
+function normalizeStop(reason) {
+  if (reason === "tool_use")
+    return "tool_calls";
+  if (reason === "max_tokens")
+    return "length";
+  return "stop";
+}
+function parseAnthropicResponse(json) {
+  let blocks = json.content || [], text = "", toolCalls = [];
+  for (let b of blocks)
+    if (b.type === "text")
+      text += b.text || "";
+    else if (b.type === "tool_use")
+      toolCalls.push({ id: b.id, name: b.name, arguments: b.input || {} });
+  return { text, toolCalls, finishReason: normalizeStop(json.stop_reason) };
+}
+async function* streamAnthropicEvents(lines, onDone) {
+  let text = "", toolCalls = /* @__PURE__ */ new Map, stopReason = "stop";
+  for await (let data of lines) {
+    let json;
+    try {
+      json = JSON.parse(data);
+    } catch {
+      continue;
+    }
+    if (json.type === "content_block_start" && json.content_block?.type === "tool_use")
+      toolCalls.set(json.index, {
+        id: json.content_block.id,
+        name: json.content_block.name,
+        json: ""
+      });
+    else if (json.type === "content_block_delta") {
+      if (json.delta?.type === "text_delta" && json.delta.text)
+        text += json.delta.text, yield { text: json.delta.text };
+      else if (json.delta?.type === "input_json_delta" && json.delta.partial_json) {
+        let entry = toolCalls.get(json.index);
+        if (entry)
+          entry.json += json.delta.partial_json;
+      }
+    } else if (json.type === "message_delta" && json.delta?.stop_reason)
+      stopReason = normalizeStop(json.delta.stop_reason);
+  }
+  let calls = [];
+  for (let entry of toolCalls.values()) {
+    let args = {};
+    try {
+      args = JSON.parse(entry.json || "{}");
+    } catch {
+      args = {};
+    }
+    calls.push({ id: entry.id, name: entry.name, arguments: args });
+  }
+  onDone({ text, toolCalls: calls, finishReason: stopReason });
+}
+
+// findbar-ai/llm/client.js
+var RETRYABLE = [429, 500, 502, 503, 504];
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    let t = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort), resolve();
+    }, ms), onAbort = () => {
+      clearTimeout(t), reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: !0 });
+  });
+}
+function isNetworkError(err) {
+  return err?.name === "TypeError" || /network|fetch|failed|timeout|connection|refused/i.test(err?.message || "");
+}
+async function postChat(url, headers, body, signal, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 0;attempt < attempts; attempt++)
+    try {
+      let res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal
+      });
+      if (res.ok)
+        return res;
+      if (RETRYABLE.includes(res.status) && attempt < attempts - 1) {
+        await res.text().catch(() => ""), await sleep(Math.min(1000 * 2 ** attempt, 1e4), signal);
+        continue;
+      }
+      let bodyText = await res.text().catch(() => "");
+      throw Object.assign(Error(bodyText || res.statusText), { friendly: !0 });
+    } catch (err) {
+      if (err?.name === "AbortError")
+        throw err;
+      if (err?.friendly)
+        throw err;
+      if (isNetworkError(err) && attempt < attempts - 1) {
+        lastError = err, await sleep(Math.min(1000 * 2 ** attempt, 1e4), signal);
+        continue;
+      }
+      throw err;
+    }
+  throw lastError || Error("Request failed after retries");
+}
+function cleanMessage(m) {
+  let out = { role: m.role, content: typeof m.content === "string" ? m.content : "" };
+  if (m.tool_calls)
+    out.tool_calls = m.tool_calls;
+  if (m.tool_call_id)
+    out.tool_call_id = m.tool_call_id;
+  if (m.name)
+    out.name = m.name;
+  return out;
+}
+function openAIBody(provider, system, messages, tools, stream, sampling, jsonMode) {
+  let clean = messages.map(cleanMessage), model = String(provider.model || "").toLowerCase(), baseURL = String(provider.baseURL || "").toLowerCase(), isAzureOrOpenAI = baseURL.includes("openai.azure.com") || baseURL.includes("api.openai.com"), isOpenAIModel = /^o\d+/i.test(model) || /^gpt-(?!oss)/i.test(model) || model.includes("chatgpt"), isReasoningModel = /^o\d+/i.test(model) || /^gpt-[5-9]/i.test(model) || model.includes("reasoning") || /(^|[^a-z0-9])r1([^a-z0-9]|$)/.test(model), systemRole = /^o\d+/i.test(model) ? "developer" : "system", body = {
+    model: provider.model,
+    messages: system ? [{ role: systemRole, content: system }, ...clean] : clean,
+    stream
+  };
+  if (!isReasoningModel) {
+    if (sampling.temperature !== void 0)
+      body.temperature = sampling.temperature;
+    if (sampling.topP !== void 0)
+      body.top_p = sampling.topP;
+    if (provider.kind !== "gemini") {
+      if (sampling.frequencyPenalty !== void 0)
+        body.frequency_penalty = sampling.frequencyPenalty;
+      if (sampling.presencePenalty !== void 0)
+        body.presence_penalty = sampling.presencePenalty;
     }
   }
-}, messageManagerAPI = {
-  send(cmd, data = {}) {
-    if (updateMessageManager(), !currentMessageManager)
-      return PREFS2.debugError("No message manager available."), Promise.reject(Error("No message manager available."));
-    return new Promise((resolve, reject) => {
-      let listener = (msg) => {
-        if (msg.data.command === cmd)
-          if (currentMessageManager.removeMessageListener("FindbarAI:Result", listener), msg.data.result && msg.data.result.error)
-            reject(Error(msg.data.result.error));
-          else
-            resolve(msg.data.result);
-      };
-      currentMessageManager.addMessageListener("FindbarAI:Result", listener), currentMessageManager.sendAsyncMessage("FindbarAI:Command", { command: cmd, data });
-    });
-  },
-  getUrlAndTitle() {
-    return {
-      url: gBrowser.currentURI.spec,
-      title: gBrowser.selectedBrowser.contentTitle
-    };
-  },
-  async getHTMLContent() {
-    return this.send("GetPageHTMLContent").catch((error) => (PREFS2.debugError("Failed to get page HTML content:", error), {}));
-  },
-  async getSelectedText() {
-    return this.send("GetSelectedText").then((result) => {
-      if (!result || !result.hasSelection)
-        return this.getUrlAndTitle();
-      return result;
-    }).catch((error) => (PREFS2.debugError("Failed to get selected text:", error), this.getUrlAndTitle()));
-  },
-  async getPageTextContent(trimWhiteSpace = !0) {
-    return this.send("GetPageTextContent", { trimWhiteSpace }).catch((error) => (PREFS2.debugError("Failed to get page text content:", error), this.getUrlAndTitle()));
-  },
-  async clickElement(selector) {
-    return this.send("ClickElement", { selector }).catch((error) => (PREFS2.debugError(`Failed to click element with selector "${selector}":`, error), { error: `Failed to click element with selector "${selector}".` }));
-  },
-  async fillForm(selector, value) {
-    return this.send("FillForm", { selector, value }).catch((error) => (PREFS2.debugError(`Failed to fill form with selector "${selector}":`, error), { error: `Failed to fill form with selector "${selector}".` }));
-  },
-  async getYoutubeTranscript() {
-    return this.send("GetYoutubeTranscript").catch((error) => (PREFS2.debugError("Failed to get youtube transcript:", error), { error: `Failed to get youtube transcript: ${error.message}` }));
-  },
-  async getYoutubeDescription() {
-    return this.send("GetYoutubeDescription").catch((error) => (PREFS2.debugError("Failed to get youtube description:", error), { error: `Failed to get youtube description: ${error.message}` }));
-  },
-  async getYoutubeComments(count) {
-    return this.send("GetYoutubeComments", { count }).catch((error) => (PREFS2.debugError("Failed to get youtube comments:", error), { error: `Failed to get youtube comments: ${error.message}` }));
+  if (sampling.maxTokens !== void 0)
+    if (isAzureOrOpenAI || isOpenAIModel || isReasoningModel)
+      body.max_completion_tokens = sampling.maxTokens;
+    else
+      body.max_tokens = sampling.maxTokens;
+  if (tools)
+    body.tools = Object.entries(tools).map(([name, t]) => ({
+      type: "function",
+      function: { name, description: t.description, parameters: t.parameters }
+    })), body.tool_choice = "auto";
+  if (jsonMode)
+    body.response_format = { type: "json_object" };
+  return body;
+}
+function openAIHeaders(provider) {
+  let headers = { "Content-Type": "application/json", ...provider.extraHeaders };
+  if (provider.apiKey)
+    headers.Authorization = `Bearer ${provider.apiKey}`;
+  return headers;
+}
+function normalizeFinish(finishReason, toolCalls) {
+  if (finishReason === "stop" && toolCalls.length)
+    return "tool_calls";
+  return finishReason || "stop";
+}
+function parseToolCalls(rawCalls) {
+  let calls = [];
+  for (let c of rawCalls || []) {
+    let args = {};
+    try {
+      args = JSON.parse(c.function?.arguments || "{}");
+    } catch {
+      args = {};
+    }
+    let call = { id: c.id, name: c.function?.name, arguments: args };
+    if (c.extra_content)
+      call.extra_content = c.extra_content;
+    calls.push(call);
   }
-};
+  return calls;
+}
+async function completeOpenAI(provider, system, messages, tools, sampling, jsonMode, signal) {
+  let json = await (await postChat(provider.baseURL, openAIHeaders(provider), openAIBody(provider, system, messages, tools, !1, sampling, jsonMode), signal)).json();
+  if (json.error)
+    throw Object.assign(Error(JSON.stringify(json.error)), { friendly: !0 });
+  let choice = json.choices?.[0] || {}, msg = choice.message || {}, toolCalls = parseToolCalls(msg.tool_calls);
+  return {
+    text: typeof msg.content === "string" ? msg.content : "",
+    toolCalls,
+    finishReason: normalizeFinish(choice.finish_reason, toolCalls)
+  };
+}
+async function completeAnthropic(provider, system, messages, tools, sampling, signal) {
+  let res = await postChat(anthropicUrl(), anthropicHeaders(provider.apiKey), buildAnthropicBody({
+    system,
+    messages,
+    tools,
+    sampling: { ...sampling, model: provider.model },
+    stream: !1
+  }), signal);
+  return parseAnthropicResponse(await res.json());
+}
+async function* sseDataLines(response) {
+  let reader = response.body.getReader(), decoder = /* @__PURE__ */ new TextDecoder, buf = "";
+  while (!0) {
+    let { done, value } = await reader.read();
+    if (done)
+      break;
+    buf += decoder.decode(value, { stream: !0 });
+    let parts = buf.split(`
+`);
+    buf = parts.pop() || "";
+    for (let part of parts) {
+      let line = part.trim();
+      if (line.startsWith("data:"))
+        yield line.slice(5).trim();
+    }
+  }
+  if (buf.trim().startsWith("data:"))
+    yield buf.trim().slice(5).trim();
+}
+async function* streamStep(provider, system, messages, tools, sampling, signal, onDone) {
+  if (provider.kind === "anthropic") {
+    let res = await postChat(anthropicUrl(), anthropicHeaders(provider.apiKey), buildAnthropicBody({
+      system,
+      messages,
+      tools,
+      sampling: { ...sampling, model: provider.model },
+      stream: !0
+    }), signal);
+    yield* streamAnthropicEvents(sseDataLines(res), onDone);
+    return;
+  }
+  let res = await postChat(provider.baseURL, openAIHeaders(provider), openAIBody(provider, system, messages, tools, !0, sampling, !1), signal), text = "", callsByIndex = /* @__PURE__ */ new Map, finishReason = "stop";
+  for await (let data of sseDataLines(res)) {
+    if (data === "[DONE]")
+      break;
+    let json;
+    try {
+      json = JSON.parse(data);
+    } catch {
+      continue;
+    }
+    if (json.error)
+      throw Object.assign(Error(JSON.stringify(json.error)), { friendly: !0 });
+    let choice = json.choices?.[0] || {}, delta = choice.delta || {};
+    if (typeof delta.content === "string" && delta.content)
+      text += delta.content, yield { text: delta.content };
+    for (let tc of delta.tool_calls || []) {
+      let idx = tc.index ?? 0;
+      if (!callsByIndex.has(idx))
+        callsByIndex.set(idx, { id: tc.id, name: tc.function?.name, args: "" });
+      let entry = callsByIndex.get(idx);
+      if (tc.id)
+        entry.id = tc.id;
+      if (tc.function?.name)
+        entry.name = tc.function.name;
+      if (tc.function?.arguments)
+        entry.args += tc.function.arguments;
+      if (tc.extra_content)
+        entry.extra_content = tc.extra_content;
+    }
+    if (choice.finish_reason)
+      finishReason = choice.finish_reason;
+  }
+  let toolCalls = [];
+  for (let entry of callsByIndex.values()) {
+    let args = {};
+    try {
+      args = JSON.parse(entry.args || "{}");
+    } catch {
+      args = {};
+    }
+    if (entry.name) {
+      let call = { id: entry.id, name: entry.name, arguments: args };
+      if (entry.extra_content)
+        call.extra_content = entry.extra_content;
+      toolCalls.push(call);
+    }
+  }
+  onDone({ text, toolCalls, finishReason: normalizeFinish(finishReason, toolCalls) });
+}
+async function executeToolCall(tools, call, { signal, timeoutMs = 30000 } = {}) {
+  let tool = tools[call.name];
+  if (!tool)
+    return JSON.stringify({ error: `Unknown tool "${call.name}".` });
+  if (signal?.aborted)
+    return JSON.stringify({ error: `Tool "${call.name}" was stopped before it started.` });
+  let timer = null, onAbort = null;
+  try {
+    let result = await Promise.race([
+      tool.execute(call.arguments || {}, { signal }),
+      new Promise((_, reject) => {
+        if (timer = setTimeout(() => reject(Error(`Tool "${call.name}" timed out after ${Math.round(timeoutMs / 1000)}s without responding.`)), timeoutMs), signal)
+          onAbort = () => reject(new DOMException("Aborted", "AbortError")), signal.addEventListener("abort", onAbort, { once: !0 });
+      })
+    ]);
+    return typeof result === "string" ? result : JSON.stringify(result ?? {});
+  } catch (err) {
+    if (err?.name === "AbortError")
+      return JSON.stringify({ error: `Tool "${call.name}" was stopped.` });
+    return JSON.stringify({ error: err?.message || String(err) });
+  } finally {
+    if (timer)
+      clearTimeout(timer);
+    if (signal && onAbort)
+      signal.removeEventListener("abort", onAbort);
+  }
+}
+async function runLoop({
+  provider,
+  system,
+  messages,
+  tools,
+  maxSteps,
+  sampling = {},
+  jsonMode,
+  abortSignal,
+  onTextDelta
+}) {
+  if (jsonMode && tools)
+    throw Error("jsonMode and tools cannot be combined.");
+  let convo = [...messages], added = [], text = "", steps = Math.max(1, maxSteps || 1);
+  for (let step = 0;step < steps; step++) {
+    let streaming = !!onTextDelta, stepResult;
+    if (streaming) {
+      let collected = "", toolCalls = [], finishReason = "stop", gen = streamStep(provider, system, convo, tools, sampling, abortSignal, (done) => {
+        collected = done.text, toolCalls.push(...done.toolCalls), finishReason = done.finishReason;
+      });
+      for await (let chunk of gen)
+        onTextDelta(chunk.text);
+      stepResult = { text: collected, toolCalls, finishReason };
+    } else if (provider.kind === "anthropic")
+      stepResult = await completeAnthropic(provider, system, convo, tools, sampling, abortSignal);
+    else
+      stepResult = await completeOpenAI(provider, system, convo, tools, sampling, jsonMode, abortSignal);
+    if (text = stepResult.text, !stepResult.toolCalls.length) {
+      added.push({ role: "assistant", content: text });
+      break;
+    }
+    let assistantMsg = {
+      role: "assistant",
+      content: text || "",
+      tool_calls: stepResult.toolCalls.map((c) => ({
+        id: c.id,
+        type: "function",
+        function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) },
+        ...c.extra_content ? { extra_content: c.extra_content } : {}
+      }))
+    };
+    convo.push(assistantMsg), added.push(assistantMsg);
+    for (let call of stepResult.toolCalls) {
+      let result = await executeToolCall(tools, call, { signal: abortSignal }), toolMsg = { role: "tool", tool_call_id: call.id, content: String(result) };
+      convo.push(toolMsg), added.push(toolMsg);
+    }
+    if (step === steps - 1 && stepResult.toolCalls.length)
+      text = text ? `${text}
+
+[Stopped after ${steps} tool steps.]` : `[Stopped after ${steps} tool steps with no final answer. Try a narrower request.]`;
+  }
+  return { text, response: { messages: added } };
+}
+async function generateText(options) {
+  return runLoop({ ...options, onTextDelta: null });
+}
+function streamText(options) {
+  let seen = [], outcome = null, waiters = /* @__PURE__ */ new Set, wake = () => {
+    for (let w of [...waiters])
+      w();
+    waiters.clear();
+  };
+  async function* textStream() {
+    let i = 0;
+    for (;; ) {
+      while (i < seen.length)
+        yield seen[i++];
+      if (outcome) {
+        if (outcome.error)
+          throw outcome.error;
+        return;
+      }
+      await new Promise((resolve) => waiters.add(resolve));
+    }
+  }
+  let text = (async () => {
+    try {
+      let result = await runLoop({
+        ...options,
+        onTextDelta: (delta) => {
+          seen.push(delta), wake();
+        }
+      });
+      if (outcome = { result }, options.onFinish)
+        await options.onFinish(result);
+      return wake(), result.text;
+    } catch (error) {
+      throw outcome = { error }, wake(), error;
+    }
+  })();
+  return { textStream: textStream(), text };
+}
+
+// findbar-ai/findbar-ai.uc.js
+init_messageManager();
+
+// findbar-ai/llm/youtube.js
+init_prefs();
+var cache = { url: null, context: null };
+function getYouTubeVideoId(url) {
+  if (!url)
+    return null;
+  try {
+    let u = new URL(String(url).trim()), host = u.hostname.replace(/^www\./, "").replace(/^m\./, "").replace(/^music\./, "");
+    if (host === "youtu.be")
+      return u.pathname.slice(1).split("/")[0] || null;
+    if (host === "youtube.com" || host === "youtube-nocookie.com") {
+      if (u.pathname === "/watch")
+        return u.searchParams.get("v");
+      let m = u.pathname.match(/^\/(embed|shorts|live|v)\/([^/?]+)/);
+      if (m)
+        return m[2];
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+function decodeEntities(text) {
+  return String(text).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+}
+function parseTimedXml(xml) {
+  let segments = [];
+  for (let m of String(xml).matchAll(/<text start="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/g)) {
+    let text = decodeEntities(m[2].replace(/<[^>]+>/g, " "));
+    if (text)
+      segments.push({ start: Math.floor(Number(m[1])), text });
+  }
+  return segments;
+}
+function formatTimestamp(seconds) {
+  let s = Math.max(0, Math.floor(seconds)), h = Math.floor(s / 3600), m = String(Math.floor(s % 3600 / 60)).padStart(h ? 2 : 1, "0"), sec = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${m}:${sec}` : `${m}:${sec}`;
+}
+function timestampToSeconds(stamp) {
+  let raw = String(stamp).trim();
+  if (!raw)
+    return null;
+  if (/^\d+(\.\d+)?$/.test(raw))
+    return Math.floor(Number(raw));
+  let parts = raw.split(":").map(Number);
+  if (!parts.length || parts.some(Number.isNaN))
+    return null;
+  return parts.reduce((acc, p) => acc * 60 + p, 0);
+}
+function pickTrack(tracks, locale) {
+  let base = String(locale || "en").split("-")[0];
+  return tracks.find((t) => t.languageCode === base) || tracks.find((t) => (t.languageCode || "").startsWith(base)) || tracks.find((t) => t.languageCode === "en") || tracks[0];
+}
+async function fetchWithTimeout(url, options = {}, ms = 15000) {
+  let controller = new AbortController, timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (e) {
+    if (e?.name === "AbortError")
+      throw Error("Transcript unavailable (request timed out).");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function fetchTranscript(videoId) {
+  let locale = "en";
+  try {
+    locale = Services.locale.appLocaleAsBCP47 || navigator.language || "en";
+  } catch {
+    locale = "en";
+  }
+  let playerRes = await fetchWithTimeout("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      context: { client: { clientName: "ANDROID", clientVersion: "20.10.38" } },
+      videoId
+    })
+  });
+  if (!playerRes.ok)
+    throw Error(`Transcript unavailable (player: ${playerRes.status}).`);
+  let tracks = (await playerRes.json())?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+  if (!tracks.length)
+    throw Error("Transcript unavailable (no captions).");
+  let track = pickTrack(tracks, locale), capRes = await fetchWithTimeout(track.baseUrl);
+  if (!capRes.ok)
+    throw Error(`Transcript unavailable (captions: ${capRes.status}).`);
+  let segments = parseTimedXml(await capRes.text());
+  if (!segments.length)
+    throw Error("Transcript unavailable (empty).");
+  return segments;
+}
+function formatTranscript(segments, limit = 0) {
+  let lines = segments.map((s) => `[${formatTimestamp(s.start)}] ${s.text}`), out = "";
+  for (let line of lines) {
+    if (limit > 0 && out.length + line.length + 1 > limit) {
+      out += `
+
+[Transcript truncated.]`;
+      break;
+    }
+    out += (out ? `
+` : "") + line;
+  }
+  return out;
+}
+async function getVideoContext(url, limit = 0) {
+  let videoId = getYouTubeVideoId(url);
+  if (!videoId)
+    return null;
+  if (cache.url === url && cache.limit === limit && cache.context)
+    return cache.context;
+  prefs_default.debugLog("Fetching YouTube transcript via InnerTube:", videoId);
+  let segments = null;
+  try {
+    segments = await fetchTranscript(videoId);
+  } catch (e) {
+    prefs_default.debugLog("InnerTube transcript failed, trying page transcript.", e?.message), segments = await getPageTranscriptSegments();
+  }
+  if (!segments?.length)
+    throw Error("Transcript unavailable (empty).");
+  let context = { videoId, segments, text: formatTranscript(segments, limit) };
+  return cache = { url, limit, context }, context;
+}
+async function getPageTranscriptSegments() {
+  await Promise.resolve().then(() => init_messageManager());
+  let result = await messageManagerAPI.getYoutubeTranscript().catch(() => null);
+  return String(result?.transcript || "").split(`
+`).map((l) => l.trim()).filter(Boolean).map((line) => {
+    let m = line.match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (m && timestampToSeconds(m[1]) !== null)
+      return { start: timestampToSeconds(m[1]), text: m[2] };
+    return { start: 0, text: line };
+  });
+}
+
+// findbar-ai/findbar-ai.uc.js
+init_prefs();
 
 // utils/parse.js
 var parseElement = (elementString, type = "html") => {
@@ -615,7 +1439,641 @@ var parseElement = (elementString, type = "html") => {
   if (typeof str !== "string")
     return str;
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}, xulImage = (src = "", className = "") => parseElement(`<image${className ? ` class="${escapeXmlAttribute(className)}"` : ""}${src ? ` src="${escapeXmlAttribute(src)}"` : ""}/>`, "xul");
+
+// utils/icon.js
+var svgToUrl = (iconSVG) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(iconSVG)}`;
+var icons = {
+  keyboard: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="context-fill light-dark(black, white)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/></g></svg>',
+  toolLoading: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--zenux-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
+  send: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M17.991 6.01L5.399 10.563l4.195 2.428l3.699-3.7a1 1 0 0 1 1.414 1.415l-3.7 3.7l2.43 4.194L17.99 6.01Zm.323-2.244c1.195-.433 2.353.725 1.92 1.92l-5.282 14.605c-.434 1.198-2.07 1.344-2.709.241l-3.217-5.558l-5.558-3.217c-1.103-.639-.957-2.275.241-2.709z" /></svg>',
+  stop: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12S6.477 2 12 2m2 6h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2" /></svg>'
 };
+
+// utils/code-highlight.js
+var JS_KEYWORDS = new Set("break case catch class const continue debugger default delete do else export extends finally for function if import in instanceof let new return static super switch throw try typeof var void while with yield async await of from as get set constructor".split(" ")), PY_KEYWORDS = new Set("and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield True False None".split(" ")), CSS_AT_RULES = new Set(["media", "import", "keyframes", "font-face", "supports", "charset", "namespace"].map((r) => `@${r}`));
+function escapeHtml(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function span(cls, raw) {
+  return `<span class="${cls}">${escapeHtml(raw)}</span>`;
+}
+function tokenize(code, re, classify) {
+  let src = String(code), rx = new RegExp(re.source, "g"), out = "", last = 0, m;
+  while ((m = rx.exec(src)) !== null)
+    if (out += escapeHtml(src.slice(last, m.index)), out += classify(m), last = m.index + m[0].length, m[0].length === 0)
+      rx.lastIndex++;
+  return out += escapeHtml(src.slice(last)), out;
+}
+var JS_RE = /(\/\*[\s\S]*?(?:\*\/|$))|(\/\/[^\n]*)|(`(?:[^`\\]|\\.)*(?:`|$))|('(?:[^'\\\n]|\\.)*(?:'|$))|("(?:[^"\\\n]|\\.)*(?:"|$))|\b(\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?n?)\b|\b([A-Za-z_$][\w$]*)(?=\s*\()|\b([A-Za-z_$][\w$]*)\b/g, JS_CONSTANTS = /* @__PURE__ */ new Set([
+  "true",
+  "false",
+  "null",
+  "undefined",
+  "NaN",
+  "Infinity",
+  "this",
+  "super"
+]);
+function highlightJS(code) {
+  return tokenize(code, JS_RE, (m) => {
+    let [full, blockComment, lineComment, tpl, sq, dq, num, call, word] = m;
+    if (blockComment ?? lineComment)
+      return span("pl-c", full);
+    if (tpl ?? sq ?? dq)
+      return span("pl-s", full);
+    if (num)
+      return span("pl-c1", full);
+    if (call) {
+      if (JS_KEYWORDS.has(call))
+        return span("pl-k", full);
+      if (JS_CONSTANTS.has(call))
+        return span("pl-c1", full);
+      return span("pl-en", full);
+    }
+    if (word) {
+      if (JS_KEYWORDS.has(word))
+        return span("pl-k", full);
+      if (JS_CONSTANTS.has(word))
+        return span("pl-c1", full);
+      if (/^[A-Z]/.test(word))
+        return span("pl-en", full);
+      return escapeHtml(full);
+    }
+    return escapeHtml(full);
+  });
+}
+var PY_RE = /(#[^\n]*)|('''[\s\S]*?(?:'''|$)|"""[\s\S]*?(?:"""|$))|('(?:[^'\\\n]|\\.)*(?:'|$))|("(?:[^"\\\n]|\\.)*(?:"|$))|\b(\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?j?)\b|\b([A-Za-z_]\w*)\b/g;
+function highlightPython(code) {
+  return tokenize(code, PY_RE, (m) => {
+    let [full, comment, triple, sq, dq, num, word] = m;
+    if (comment)
+      return span("pl-c", full);
+    if (triple ?? sq ?? dq)
+      return span("pl-s", full);
+    if (num)
+      return span("pl-c1", full);
+    if (word) {
+      if (PY_KEYWORDS.has(word))
+        return span("pl-k", full);
+      if (/^[A-Z]/.test(word))
+        return span("pl-en", full);
+      return escapeHtml(full);
+    }
+    return escapeHtml(full);
+  });
+}
+var MARKUP_RE = /(<!--[\s\S]*?(?:-->|$))|(<\/?[A-Za-z][\w:.-]*|\/?>)|([A-Za-z_:][\w:.-]*)(?=\s*=\s*["'])|('(?:[^'\\]|\\.)*(?:'|$))|("(?:[^"\\]|\\.)*(?:"|$))/g;
+function highlightMarkup(code) {
+  return tokenize(code, MARKUP_RE, (m) => {
+    let [full, comment, tag, attr, sq, dq] = m;
+    if (comment)
+      return span("pl-c", full);
+    if (tag)
+      return span("pl-ent", full);
+    if (attr)
+      return span("pl-c1", full);
+    if (sq ?? dq)
+      return span("pl-s", full);
+    return escapeHtml(full);
+  });
+}
+var CSS_RE = /(\/\*[\s\S]*?(?:\*\/|$))|("(?:[^"\\]|\\.)*(?:"|$))|('(?:[^'\\]|\\.)*(?:'|$))|(@[\w-]+)|(#(?:[\da-fA-F]{3,8})\b)|(\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg)?\b)|([A-Za-z-][\w-]*)(?=\s*:)/g;
+function highlightCSS(code) {
+  return tokenize(code, CSS_RE, (m) => {
+    let [full, comment, dq, sq, at, hex, num, prop] = m;
+    if (comment)
+      return span("pl-c", full);
+    if (dq ?? sq)
+      return span("pl-s", full);
+    if (at)
+      return CSS_AT_RULES.has(at) ? span("pl-k", full) : span("pl-en", full);
+    if (hex ?? num)
+      return span("pl-c1", full);
+    if (prop)
+      return span("pl-c1", full);
+    return escapeHtml(full);
+  });
+}
+var GENERIC_RE = /(\/\*[\s\S]*?(?:\*\/|$))|(\/\/[^\n]*|#[^\n]*)|(`(?:[^`\\]|\\.)*(?:`|$))|('(?:[^'\\\n]|\\.)*(?:'|$))|("(?:[^"\\\n]|\\.)*(?:"|$))|\b(\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g;
+function highlightGeneric(code) {
+  return tokenize(code, GENERIC_RE, (m) => {
+    let [full, blockComment, lineComment, tpl, sq, dq, num] = m;
+    if (blockComment ?? lineComment)
+      return span("pl-c", full);
+    if (tpl ?? sq ?? dq)
+      return span("pl-s", full);
+    if (num)
+      return span("pl-c1", full);
+    return escapeHtml(full);
+  });
+}
+var LANG_ALIASES = {
+  js: "js",
+  javascript: "js",
+  jsx: "js",
+  ts: "js",
+  typescript: "js",
+  tsx: "js",
+  mjs: "js",
+  cjs: "js",
+  json: "js",
+  jsonc: "js",
+  py: "python",
+  python: "python",
+  html: "markup",
+  xml: "markup",
+  svg: "markup",
+  css: "css"
+};
+function highlightCode(code, lang) {
+  let normalized = String(lang || "").trim().toLowerCase(), kind = LANG_ALIASES[normalized] || (normalized ? "generic" : "js");
+  if (kind === "js")
+    return highlightJS(code);
+  if (kind === "python")
+    return highlightPython(code);
+  if (kind === "markup")
+    return highlightMarkup(code);
+  if (kind === "css")
+    return highlightCSS(code);
+  return highlightGeneric(code);
+}
+
+// findbar-ai/utils/markdown.js
+var CITE_RE = /<span class="citation-link"[^>]*>.*?<\/span>/g, CLOSED_FENCE_RE = /^```(\w*)\n([\s\S]*?)\n```/gm, OPEN_FENCE_RE = /^```(\w*)\n([\s\S]*)$/m;
+function escapeHtml2(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function stashPlaceholders(text, regex, stash) {
+  return text.replace(regex, (m) => (stash.push(m), `%%STASH${stash.length - 1}%%`));
+}
+function renderInline(text) {
+  let stash = [];
+  return text = stashPlaceholders(text, CITE_RE, stash), text = escapeHtml2(text), text = text.replace(/`([^`\n]+)`/g, (_m, code) => `<code>${code}</code>`), text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>"), text = text.replace(/(^|\W)\*([^*\n]+)\*/g, "$1<em>$2</em>"), text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => `<a href="${escapeHtml2(url).replace(/"/g, "%22")}" target="_blank" rel="noopener">${label}</a>`), text.replace(/%%STASH(\d+)%%/g, (_m, i) => stash[Number(i)]);
+}
+function isTableDivider(line) {
+  return /^\|?[\s:|-]+\|?[\s:|-]*$/.test(line) && line.includes("-");
+}
+function renderTable(header, rows) {
+  let cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) => `<th>${renderInline(c.trim())}</th>`).join(""), bodyCells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) => `<td>${renderInline(c.trim())}</td>`).join("");
+  return `<table><thead><tr>${cells(header)}</tr></thead><tbody>` + rows.map((r) => `<tr>${bodyCells(r)}</tr>`).join("") + "</tbody></table>";
+}
+function renderCodeBlock(lang, code, complete = !0) {
+  let normalizedLang = String(lang || "").trim(), label = escapeHtml2(normalizedLang || "code"), highlighted = highlightCode(String(code).replace(/\n$/, ""), normalizedLang);
+  return `<div class="zh-codeblock${complete ? "" : " is-streaming"}"><div class="zh-codeblock-head"><span>${label}</span><span class="zh-codeblock-copy" role="button" tabindex="0">Copy</span></div><pre><code>${highlighted}</code></pre></div>`;
+}
+function renderBlocks(text) {
+  let codeBlocks = [], stashCode = (lang, code, complete) => (codeBlocks.push({ lang, code, complete }), `%%CODEBLOCK${codeBlocks.length - 1}%%`);
+  text = String(text).replace(CLOSED_FENCE_RE, (_m, lang, code) => stashCode(lang, code, !0)), text = text.replace(OPEN_FENCE_RE, (_m, lang, code) => stashCode(lang, code, !1));
+  let lines = String(text).split(`
+`), html = [], para = [], list = null, flushPara = () => {
+    if (para.length)
+      html.push(`<p>${para.join("<br />")}</p>`);
+    para = [];
+  }, flushList = () => {
+    if (list)
+      html.push(list.ordered ? `<ol>${list.items}</ol>` : `<ul>${list.items}</ul>`);
+    list = null;
+  };
+  for (let i = 0;i < lines.length; i++) {
+    let line = lines[i], trimmed = line.trim();
+    if (!trimmed) {
+      flushPara(), flushList();
+      continue;
+    }
+    let codeMatch = trimmed.match(/^%%CODEBLOCK(\d+)%%$/);
+    if (codeMatch) {
+      flushPara(), flushList();
+      let block = codeBlocks[Number(codeMatch[1])];
+      html.push(renderCodeBlock(block.lang, block.code, block.complete));
+      continue;
+    }
+    let heading = trimmed.match(/^(#{1,6})\s+(.*)/);
+    if (heading) {
+      flushPara(), flushList(), html.push(`<h${heading[1].length}>${renderInline(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
+    if (/^(-{3,}|\*{3,})$/.test(trimmed)) {
+      flushPara(), flushList(), html.push("<hr />");
+      continue;
+    }
+    let quote = line.match(/^>(.*)$/);
+    if (quote) {
+      flushPara(), flushList(), html.push(`<blockquote>${renderInline(quote[1].trim())}</blockquote>`);
+      continue;
+    }
+    if (trimmed.includes("|") && i + 1 < lines.length && isTableDivider(lines[i + 1].trim())) {
+      flushPara(), flushList();
+      let rows = [];
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim())
+        rows.push(lines[i]), i++;
+      i--, html.push(renderTable(trimmed, rows));
+      continue;
+    }
+    let ordered = trimmed.match(/^\d+\.\s+(.*)/), unordered = trimmed.match(/^[-*]\s+(.*)/);
+    if (ordered || unordered) {
+      flushPara();
+      let isOrdered = !!ordered, item = renderInline((ordered || unordered)[1]);
+      if (!list || list.ordered !== isOrdered)
+        flushList(), list = { ordered: isOrdered, items: "" };
+      list.items += `<li>${item}</li>`;
+      continue;
+    }
+    flushList(), para.push(renderInline(trimmed));
+  }
+  return flushPara(), flushList(), html.join(`
+`);
+}
+function parseMD(markdown, convertHTML = !0) {
+  let body = renderBlocks(markdown ?? "");
+  if (!convertHTML)
+    return body;
+  let el = parseElement('<div class="markdown-body"></div>');
+  return el.innerHTML = body, el;
+}
+
+// findbar-ai/utils/chat.js
+function messageCopyText(wrap) {
+  return (wrap?.querySelector(".message-content")?.textContent || "").trim();
+}
+function flashActionIcon(btn, src, ms = 1200) {
+  let img = btn?.querySelector("img");
+  if (!img)
+    return;
+  let prev = img.getAttribute("src");
+  img.setAttribute("src", src), setTimeout(() => {
+    if (btn.isConnected)
+      img.setAttribute("src", prev);
+  }, ms);
+}
+async function copyChatMessage(wrap, btn) {
+  let text = messageCopyText(wrap);
+  if (!text)
+    return;
+  try {
+    if (await navigator.clipboard.writeText(text), btn)
+      flashActionIcon(btn, "chrome://global/skin/icons/check.svg");
+  } catch {}
+}
+function buildMessageActions({ regenerate = !0 } = {}) {
+  let actions = parseElement('<div class="bb-msg-actions"></div>'), copyBtn = parseElement('<button class="bb-msg-copy zenux-icon-btn" tooltiptext="Copy message"><img src="chrome://global/skin/icons/edit-copy.svg" width="14" height="14" alt="" /></button>');
+  if (actions.appendChild(copyBtn), regenerate) {
+    let regenBtn = parseElement('<button class="bb-msg-regen zenux-icon-btn" tooltiptext="Regenerate response"><img src="chrome://global/skin/icons/reload.svg" width="14" height="14" alt="" /></button>');
+    actions.appendChild(regenBtn);
+  }
+  return actions;
+}
+function attachMessageActions(wrap, { regenerate = !0, onRegenerate } = {}) {
+  if (!wrap || wrap.querySelector(":scope > .bb-msg-actions"))
+    return;
+  let actions = buildMessageActions({ regenerate });
+  if (actions.querySelector(".bb-msg-copy")?.addEventListener("click", (e) => {
+    e.stopPropagation(), copyChatMessage(wrap, e.currentTarget);
+  }), regenerate)
+    actions.querySelector(".bb-msg-regen")?.addEventListener("click", (e) => {
+      e.stopPropagation(), onRegenerate?.(wrap, e.currentTarget);
+    });
+  wrap.appendChild(actions);
+}
+function renderStreamText(contentDiv, fullText) {
+  try {
+    contentDiv.innerHTML = parseMD(fullText, !1);
+  } catch {
+    contentDiv.textContent = fullText + `
+
+[Error rendering markdown]`;
+  }
+}
+function extractErrorText(e) {
+  let errorText = e?.message || String(e);
+  try {
+    let parsed = JSON.parse(e.message);
+    errorText = parsed?.error?.message || parsed?.message || errorText;
+  } catch {}
+  return errorText;
+}
+function isProviderBalanceExhausted(provider, text) {
+  return provider?.name === "pollinations" && typeof provider.isBalanceExhaustedText === "function" && provider.isBalanceExhaustedText(text);
+}
+function setStreamingControls({ sendBtn, stopBtn }, streaming, onIdle) {
+  if (sendBtn)
+    sendBtn.style.display = streaming ? "none" : "flex";
+  if (stopBtn)
+    stopBtn.style.display = streaming ? "flex" : "none";
+  if (!streaming && onIdle)
+    onIdle();
+}
+function openChatLink(href) {
+  try {
+    openTrustedLinkIn(href, "tab");
+  } catch {}
+}
+async function copyChatCode(copyButton) {
+  let codeEl = copyButton.closest(".zh-codeblock")?.querySelector("pre code");
+  if (!codeEl)
+    return;
+  try {
+    await navigator.clipboard.writeText(codeEl.textContent), copyButton.textContent = "Copied!";
+  } catch {
+    copyButton.textContent = "Copy failed";
+  }
+  setTimeout(() => {
+    copyButton.textContent = "Copy";
+  }, 1500);
+}
+function attachChatMessageHandlers(container, { onCitation } = {}) {
+  container.addEventListener("click", async (e) => {
+    let copyButton = e.target.closest?.(".zh-codeblock-copy");
+    if (copyButton) {
+      copyChatCode(copyButton);
+      return;
+    }
+    if (onCitation) {
+      let citation = e.target.closest?.(".citation-link");
+      if (citation) {
+        onCitation(citation, e);
+        return;
+      }
+    }
+    let anchor = e.target?.closest?.("a[href]");
+    if (!anchor)
+      return;
+    e.preventDefault(), openChatLink(anchor.href);
+  }), container.addEventListener("auxclick", (e) => {
+    if (e.button === 1) {
+      let anchor = e.target?.closest?.("a[href]");
+      if (!anchor)
+        return;
+      e.preventDefault(), openChatLink(anchor.href);
+    }
+  }), container.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ")
+      return;
+    let copyButton = e.target.closest?.(".zh-codeblock-copy");
+    if (copyButton)
+      e.preventDefault(), copyChatCode(copyButton);
+  });
+}
+
+// utils/fuzzy.js
+function calculateFuzzyScore(target, query) {
+  if (!target || !query)
+    return 0;
+  let targetLower = target.toLowerCase(), queryLower = query.toLowerCase(), targetLen = target.length, queryLen = query.length;
+  if (queryLen > targetLen)
+    return 0;
+  if (queryLen === 0)
+    return 0;
+  if (targetLower === queryLower)
+    return 200;
+  if (targetLower.startsWith(queryLower))
+    return 100 + queryLen;
+  if (targetLower.split(/[\s-_]+/).map((word) => word[0]).join("") === queryLower)
+    return 90 + queryLen;
+  let score = 0, queryIndex = 0, lastMatchIndex = -1, consecutiveMatches = 0;
+  for (let targetIndex = 0;targetIndex < targetLen; targetIndex++)
+    if (queryIndex < queryLen && targetLower[targetIndex] === queryLower[queryIndex]) {
+      let bonus = 10;
+      if (targetIndex === 0 || [" ", "-", "_"].includes(targetLower[targetIndex - 1]))
+        bonus += 15;
+      if (lastMatchIndex === targetIndex - 1)
+        consecutiveMatches++, bonus += 20 * consecutiveMatches;
+      else
+        consecutiveMatches = 0;
+      if (lastMatchIndex !== -1) {
+        let distance = targetIndex - lastMatchIndex;
+        bonus -= Math.min(distance - 1, 10);
+      }
+      score += bonus, lastMatchIndex = targetIndex, queryIndex++;
+    }
+  return queryIndex === queryLen ? score : 0;
+}
+function bestFuzzyScore(targets, query) {
+  let cleanQuery = (query || "").trim();
+  if (!cleanQuery)
+    return 1;
+  let best = 0;
+  for (let target of targets || []) {
+    if (!target)
+      continue;
+    let score = calculateFuzzyScore(target, cleanQuery);
+    if (score > best)
+      best = score;
+    if (best >= 200)
+      break;
+  }
+  return best;
+}
+function fuzzyFilterSort(items, query, getTexts) {
+  let cleanQuery = (query || "").trim();
+  if (!cleanQuery)
+    return [...items];
+  return items.map((item) => {
+    let texts = getTexts(item), list = Array.isArray(texts) ? texts : [texts];
+    return { item, score: bestFuzzyScore(list, cleanQuery) };
+  }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score).map((entry) => entry.item);
+}
+
+// utils/combobox.js
+function createCombobox({
+  id = "",
+  extraClass = "",
+  items = [],
+  value = "",
+  placeholder = "Select…",
+  searchable = !0,
+  searchPlaceholder = "Search…",
+  attrs = {}
+} = {}) {
+  let attrString = Object.entries(attrs).map(([key, val]) => `${key}="${escapeXmlAttribute(String(val))}"`).join(" "), root = parseElement(`<div class="zenux-combobox ${extraClass}"${id ? ` id="${id}"` : ""}${attrString ? ` ${attrString}` : ""} tabindex="0" role="combobox" aria-expanded="false" aria-haspopup="listbox">
+      <span class="zenux-combobox-label"></span>
+    </div>`), iconEl = xulImage("", "zenux-combobox-icon"), markerEl = xulImage("chrome://global/skin/icons/arrow-down-12.svg", "zenux-combobox-marker"), popup = parseElement(`<div class="zenux-combobox-popup" hidden>
+      <input type="text" class="zenux-combobox-search zenux-input" placeholder="${escapeXmlAttribute(searchPlaceholder)}" aria-label="${escapeXmlAttribute(searchPlaceholder)}" />
+      <div class="zenux-combobox-list" role="listbox"></div>
+    </div>`), labelEl = root.querySelector(".zenux-combobox-label");
+  root.insertBefore(iconEl, labelEl), root.appendChild(markerEl);
+  let searchEl = popup.querySelector(".zenux-combobox-search"), listEl = popup.querySelector(".zenux-combobox-list"), currentItems = [], currentValue = value ?? "", isOpen = !1;
+  function syncDisplay() {
+    let selected = currentItems.find((item) => item.value === currentValue);
+    if (selected)
+      if (labelEl.textContent = selected.label, labelEl.classList.remove("is-placeholder"), selected.image)
+        iconEl.setAttribute("src", selected.image), iconEl.style.display = "";
+      else
+        iconEl.removeAttribute("src"), iconEl.style.display = "none";
+    else
+      labelEl.textContent = placeholder, labelEl.classList.add("is-placeholder"), iconEl.removeAttribute("src"), iconEl.style.display = "none";
+    root.setAttribute("aria-label", labelEl.textContent);
+  }
+  function syncListSelection() {
+    listEl.querySelectorAll(".zenux-combobox-item").forEach((el) => {
+      el.setAttribute("aria-selected", String(el.dataset.value === currentValue));
+    });
+  }
+  function visibleItems() {
+    return [...listEl.querySelectorAll(".zenux-combobox-item:not([hidden])")];
+  }
+  function highlight(el) {
+    if (listEl.querySelectorAll(".zenux-combobox-item.is-highlighted").forEach((item) => {
+      item.classList.remove("is-highlighted");
+    }), el)
+      el.classList.add("is-highlighted"), el.scrollIntoView({ block: "nearest" });
+  }
+  function renderList(filter = "") {
+    listEl.innerHTML = "";
+    let firstVisible = null, matches = fuzzyFilterSort(currentItems, filter, (item) => [
+      item.label || "",
+      item.value || ""
+    ]);
+    for (let item of matches) {
+      let itemEl = parseElement(`<div class="zenux-combobox-item" role="option" data-value="${escapeXmlAttribute(item.value)}" aria-selected="${item.value === currentValue}">
+          <span></span>
+        </div>`);
+      if (itemEl.insertBefore(xulImage(item.image || "", "zenux-combobox-item-icon"), itemEl.firstChild), !item.image) {
+        let itemIcon = itemEl.querySelector(".zenux-combobox-item-icon");
+        if (itemIcon)
+          itemIcon.style.display = "none";
+      }
+      itemEl.querySelector("span").textContent = item.label, itemEl.addEventListener("click", () => select(item.value)), itemEl.addEventListener("mousemove", () => highlight(itemEl)), listEl.appendChild(itemEl), firstVisible ??= itemEl;
+    }
+    if (!firstVisible)
+      listEl.appendChild(parseElement('<div class="zenux-combobox-no-results">No results</div>'));
+    highlight(firstVisible);
+  }
+  function positionPopup() {
+    let rect = root.getBoundingClientRect();
+    popup.style.minWidth = `${rect.width}px`, popup.style.maxWidth = `${Math.max(rect.width, 320)}px`, popup.hidden = !1;
+    let height = Math.min(popup.offsetHeight, 280), below = window.innerHeight - rect.bottom - 8;
+    if (popup.style.left = `${Math.min(rect.left, window.innerWidth - popup.offsetWidth - 8)}px`, below >= height || below >= rect.top)
+      popup.style.top = `${rect.bottom + 4}px`, popup.style.bottom = "", popup.style.maxHeight = `${Math.min(280, below)}px`;
+    else
+      popup.style.bottom = `${window.innerHeight - rect.top + 4}px`, popup.style.top = "", popup.style.maxHeight = `${Math.min(280, rect.top - 8)}px`;
+  }
+  function open() {
+    if (isOpen)
+      return;
+    if (isOpen = !0, root.setAttribute("aria-expanded", "true"), searchEl.value = "", renderList(""), document.documentElement.appendChild(popup), positionPopup(), searchEl.hidden)
+      root.focus();
+    else
+      searchEl.focus();
+  }
+  function close(refocus = !1) {
+    if (!isOpen)
+      return;
+    if (isOpen = !1, root.setAttribute("aria-expanded", "false"), popup.remove(), refocus)
+      root.focus();
+  }
+  function select(nextValue) {
+    currentValue = nextValue ?? "", syncDisplay(), syncListSelection(), close(!0), root.dispatchEvent(new Event("command", { bubbles: !0 }));
+  }
+  return root.addEventListener("click", (event) => {
+    if (event.target === searchEl)
+      return;
+    if (isOpen)
+      close();
+    else
+      open();
+  }), root.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown")
+      event.preventDefault(), open();
+  }), searchEl.addEventListener("input", () => renderList(searchEl.value)), searchEl.addEventListener("keydown", (event) => {
+    let items = visibleItems(), index = items.findIndex((el) => el.classList.contains("is-highlighted"));
+    if (event.key === "Escape")
+      event.preventDefault(), close(!0);
+    else if (event.key === "ArrowDown")
+      event.preventDefault(), highlight(items[(index + 1) % items.length] ?? null);
+    else if (event.key === "ArrowUp")
+      event.preventDefault(), highlight(items[(index - 1 + items.length) % items.length] ?? null);
+    else if (event.key === "Enter") {
+      event.preventDefault();
+      let target = items[index] ?? items[0];
+      if (target)
+        select(target.dataset.value);
+    }
+  }), document.addEventListener("pointerdown", (event) => {
+    if (isOpen && !popup.contains(event.target) && !root.contains(event.target))
+      close();
+  }, !0), document.addEventListener("scroll", (event) => {
+    if (isOpen && !popup.contains(event.target))
+      close();
+  }, !0), window.addEventListener("resize", () => close()), document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isOpen)
+      close(!0);
+  }), Object.defineProperty(root, "value", {
+    get: () => currentValue,
+    set: (next) => {
+      currentValue = next ?? "", syncDisplay(), syncListSelection();
+    },
+    configurable: !0
+  }), root.setItems = (nextItems) => {
+    if (currentItems = nextItems ?? [], searchEl.hidden = !searchable, syncDisplay(), isOpen)
+      renderList(searchEl.value);
+  }, root.setItems(items), root;
+}
+
+// findbar-ai/utils/model-selector.js
+init_prefs();
+function isDynamicModelProvider(provider) {
+  return typeof provider?.refreshModels === "function";
+}
+function displayId(id) {
+  return String(id || "").replace(/:free$/, "");
+}
+function dynamicModelLabel(provider, id) {
+  return `${provider.getModelLabel(displayId(id))}${provider.isFreeModel(id) ? " (Free)" : ""}`;
+}
+async function loadDynamicModels(provider, combo, { getApiKey, isCurrent } = {}) {
+  try {
+    let fetched = await provider.refreshModels();
+    if (isCurrent && !isCurrent())
+      return [];
+    let key = (typeof getApiKey === "function" ? await getApiKey() : "") || "", showAll = !1;
+    if (key && typeof provider.checkKey === "function")
+      try {
+        let check = await provider.checkKey(key);
+        showAll = check.valid && check.paidAccess !== !1;
+      } catch (e) {
+        prefs_default.debugError(`Could not verify key for ${provider.name}:`, e), showAll = !0;
+      }
+    let visible = showAll ? fetched : fetched.filter((id) => provider.isFreeModel(id));
+    if (isCurrent && !isCurrent())
+      return [];
+    if (combo.setItems(visible.map((id) => ({ value: id, label: dynamicModelLabel(provider, id), image: "" }))), !combo.value && visible.length)
+      combo.value = visible[0];
+    return prefs_default.debugLog(`Loaded ${visible.length} dynamic models for ${provider.name}`), visible;
+  } catch (e) {
+    return prefs_default.debugError(`Could not load models for ${provider?.name}:`, e), [];
+  }
+}
+function createModelField(provider, { id = "", value, attrs = {}, getApiKey, isCurrent, onDynamicLoaded } = {}) {
+  let current = value ?? (provider.modelPref && prefs_default.getPref(provider.modelPref) || "");
+  if (isDynamicModelProvider(provider)) {
+    let seedItems = current ? [{ value: current, label: provider.getModelLabel(displayId(current)), image: "" }] : [], combo = createCombobox({ id, attrs, value: current, items: seedItems });
+    return loadDynamicModels(provider, combo, { getApiKey, isCurrent }).then((visible) => {
+      if (isCurrent && !isCurrent())
+        return;
+      onDynamicLoaded?.(combo, visible);
+    }), combo;
+  }
+  if (provider.customModel) {
+    let attrString = Object.entries(attrs).map(([key, val]) => `${key}="${escapeXmlAttribute(String(val))}"`).join(" ");
+    return parseElement(`<input type="text" class="zenux-input"${id ? ` id="${id}"` : ""}${attrString ? ` ${attrString}` : ""} value="${escapeXmlAttribute(current || "")}" placeholder="${escapeXmlAttribute(provider.modelPlaceholder || "")}" />`, "html");
+  }
+  let fallback = current || provider.AVAILABLE_MODELS[0] || "";
+  return createCombobox({
+    id,
+    attrs,
+    value: fallback,
+    items: provider.AVAILABLE_MODELS.map((model) => ({
+      value: model,
+      label: provider.getModelLabel(model),
+      image: ""
+    }))
+  });
+}
+
+// findbar-ai/settings.js
+init_prefs();
 
 // utils/keyboard.js
 function eventToShortcutSignature(event) {
@@ -628,6 +2086,12 @@ function eventToShortcutSignature(event) {
     modifiers.push("shift");
   return modifiers.push(normalizeKeyName(event.key)), modifiers.join("+");
 }
+function getPrettyShortcut(shortcutStr) {
+  if (!shortcutStr)
+    return "";
+  let pretty = shortcutStr.toLowerCase().replace(/control/g, "⌘").replace(/accel/g, "⌘").replace(/ctrl/g, "⌘").replace(/shift/g, "⇧").replace(/option/g, "Alt").replace(/alt/g, "Alt").replace(/space/g, "␣").replace(/spacebar/g, "␣").replace(/enter/g, "↩").replace(/arrowright/g, "→").replace(/arrowleft/g, "←").replace(/arrowup/g, "↑").replace(/arrowdown/g, "↓");
+  return pretty ? pretty[0].toUpperCase() + pretty.slice(1) : "";
+}
 function normalizeKeyName(key) {
   if (!key)
     return "";
@@ -639,12 +2103,12 @@ function normalizeKeyName(key) {
 function shortcutStringToSignature(shortcutStr) {
   if (!shortcutStr)
     return "";
-  return shortcutStr.toLowerCase().replace(/control/g, "ctrl").replace(/option/g, "alt").split("+").map((s) => normalizeKeyName(s.trim())).join("+");
+  let parts = shortcutStr.toLowerCase().replace(/control/g, "ctrl").replace(/option/g, "alt").split("+").map((s) => normalizeKeyName(s.trim())), rank = (p) => p === "ctrl" ? 0 : p === "alt" ? 1 : p === "shift" ? 2 : p === "meta" ? 3 : 99, mods = parts.filter((p) => rank(p) !== 99).sort((a, b) => rank(a) - rank(b)), keys = parts.filter((p) => rank(p) === 99);
+  return [...mods, ...keys].join("+");
 }
 var _shortcuts = /* @__PURE__ */ new Map;
 function handleKeyDown(event) {
-  let t = event.target;
-  if (t && (t.tagName === "input" || t.tagName === "textarea" || t.isContentEditable))
+  if (event.target?.closest?.(".zenux-shortcut-input, .zenCKSOption-input"))
     return;
   let signature = eventToShortcutSignature(event), shortcut = _shortcuts.get(signature);
   if (shortcut)
@@ -667,167 +2131,557 @@ function unregisterShortcutById(id) {
   return !1;
 }
 
-// findbar-ai/settings.js
-var SettingsModal = {
-  _modalElement: null,
-  _currentPrefValues: {},
-  _currentShortcutTarget: null,
-  _boundHandleShortcutKeyDown: null,
-  _getSafeIdForProvider(providerName) {
-    return providerName.replace(/\./g, "-");
-  },
-  _initShortcutHandler() {
-    this._boundHandleShortcutKeyDown = this._handleShortcutKeyDown.bind(this);
-  },
+// utils/settings-modal.js
+var MODIFIER_KEYS = ["Control", "Alt", "Shift", "Meta"];
+var prefId = (prefKey) => `pref-${String(prefKey).toLowerCase().replace(/_/g, "-")}`;
+
+class ZenuxSettings {
+  constructor(prefsClass) {
+    this.PREFS = prefsClass, this.values = {}, this._shortcutTarget = null, this._boundShortcutKeyDown = this._handleShortcutKeyDown.bind(this), this._boundEscapeToClose = null, this._onClose = null;
+  }
+  static shell({
+    title,
+    bodyHTML,
+    tabs = null,
+    closeId,
+    saveId,
+    overlayClass = "",
+    overlayId = "",
+    modalClass = ""
+  }) {
+    let tabsHTML = tabs ? `<div class="zenux-settings-tabs" role="tablist">${tabs.map((tab) => `<button class="zenux-settings-tab" role="tab" data-tab="${escapeXmlAttribute(tab.id)}">${tab.icon ? `<img class="zenux-settings-tab-icon" src="${escapeXmlAttribute(tab.icon)}" />` : ""}${escapeXmlAttribute(tab.label)}</button>`).join("")}</div>` : "";
+    return `
+      <div class="zenux-settings-overlay ${escapeXmlAttribute(overlayClass)}"${overlayId ? ` id="${escapeXmlAttribute(overlayId)}"` : ""}>
+        <div class="zenux-settings-modal ${escapeXmlAttribute(modalClass)}" role="dialog" aria-label="${escapeXmlAttribute(title)}">
+          <div class="zenux-settings-header">
+            <h3 class="zenux-settings-title">${escapeXmlAttribute(title)}</h3>
+            <div class="zenux-settings-actions">
+              <button id="${escapeXmlAttribute(closeId)}" class="zenux-btn-ghost" data-close>Close</button>
+              <button id="${escapeXmlAttribute(saveId)}" class="zenux-btn-primary" data-save>Save</button>
+            </div>
+          </div>
+          ${tabsHTML}
+          <div class="zenux-settings-content">
+            ${bodyHTML}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static accordionSection({
+    title,
+    icon = "",
+    expanded = !0,
+    resetPrefs = [],
+    before = "",
+    body = "",
+    after = "",
+    id = ""
+  }) {
+    let reset = resetPrefs.filter(Boolean).join(",");
+    return `
+      <section class="zenux-settings-section zenux-settings-accordion" data-expanded="${expanded ? "true" : "false"}"${id ? ` id="${escapeXmlAttribute(id)}"` : ""}>
+        <h4 class="zenux-settings-section-head" data-accordion-head>
+          ${icon ? `<img class="zenux-settings-section-icon" src="${escapeXmlAttribute(icon)}" />` : ""}
+          <span class="zenux-settings-section-title">${escapeXmlAttribute(title)}</span>
+          ${reset ? `<button class="zenux-settings-reset zenux-icon-btn" data-reset-prefs="${escapeXmlAttribute(reset)}" title="Reset section" aria-label="Reset ${escapeXmlAttribute(title)}">
+              <img src="chrome://global/skin/icons/reload.svg" />
+            </button>` : ""}
+          <img class="zenux-settings-chevron" src="chrome://global/skin/icons/arrow-down-12.svg" />
+        </h4>
+        <div class="zenux-settings-accordion-body">
+          <div class="zenux-settings-accordion-inner">
+            ${before}
+            ${body}
+            ${after}
+          </div>
+        </div>
+      </section>
+    `;
+  }
+  static checkboxRow(label, prefKey, { id = prefId(prefKey), checked = !1 } = {}) {
+    return `
+      <div class="zenux-setting-item">
+        <label for="${escapeXmlAttribute(id)}">${escapeXmlAttribute(label)}</label>
+        <input type="checkbox" id="${escapeXmlAttribute(id)}" data-pref="${escapeXmlAttribute(prefKey)}"${checked ? " checked" : ""} />
+      </div>
+    `;
+  }
+  static numberRow(label, prefKey, { min, max, step, tooltip, value, id = prefId(prefKey) } = {}) {
+    let info = tooltip ? ZenuxSettings.infoIcon(tooltip) : "", attrs = [
+      min !== void 0 ? `min="${escapeXmlAttribute(String(min))}"` : "",
+      max !== void 0 ? `max="${escapeXmlAttribute(String(max))}"` : "",
+      step !== void 0 ? `step="${escapeXmlAttribute(String(step))}"` : "",
+      value !== void 0 && value !== null ? `value="${escapeXmlAttribute(String(value))}"` : ""
+    ].filter(Boolean).join(" ");
+    return `
+      <div class="zenux-setting-item">
+        <label for="${escapeXmlAttribute(id)}">${escapeXmlAttribute(label)} ${info}</label>
+        <input type="number" class="zenux-input" id="${escapeXmlAttribute(id)}" data-pref="${escapeXmlAttribute(prefKey)}" ${attrs} />
+      </div>
+    `;
+  }
+  static textRow(label, prefKey, { placeholder = "", password = !1, maxlength, value, id = prefId(prefKey) } = {}) {
+    return `
+      <div class="zenux-setting-item">
+        <label for="${escapeXmlAttribute(id)}">${escapeXmlAttribute(label)}</label>
+        <input type="${password ? "password" : "text"}" class="zenux-input" id="${escapeXmlAttribute(id)}" data-pref="${escapeXmlAttribute(prefKey)}" placeholder="${escapeXmlAttribute(placeholder)}"${maxlength ? ` maxlength="${maxlength}"` : ""}${value !== void 0 && value !== null ? ` value="${escapeXmlAttribute(String(value))}"` : ""} />
+      </div>
+    `;
+  }
+  static textareaRow(label, prefKey, { placeholder = "", rows = 3, value, id = prefId(prefKey) } = {}) {
+    return `
+      <div class="zenux-setting-item zenux-setting-item-stacked">
+        <label for="${escapeXmlAttribute(id)}">${escapeXmlAttribute(label)}</label>
+        <textarea class="zenux-input" id="${escapeXmlAttribute(id)}" data-pref="${escapeXmlAttribute(prefKey)}" rows="${rows}" placeholder="${escapeXmlAttribute(placeholder)}">${value !== void 0 && value !== null ? escapeXmlAttribute(String(value)) : ""}</textarea>
+      </div>
+    `;
+  }
+  static selectRow(label, prefKey, options = {}, { id = prefId(prefKey), value } = {}) {
+    let optionsHTML = Object.entries(options).map(([optionValue, optionLabel]) => `<option value="${escapeXmlAttribute(optionValue)}"${value !== void 0 && value !== null && String(optionValue) === String(value) ? " selected" : ""}>${escapeXmlAttribute(optionLabel)}</option>`).join("");
+    return `
+      <div class="zenux-setting-item">
+        <label for="${escapeXmlAttribute(id)}">${escapeXmlAttribute(label)}</label>
+        <select id="${escapeXmlAttribute(id)}" data-pref="${escapeXmlAttribute(prefKey)}">
+          ${optionsHTML}
+        </select>
+      </div>
+    `;
+  }
+  static shortcutRow(label, prefKey, { id = prefId(prefKey), value } = {}) {
+    return `
+      <div class="zenux-setting-item">
+        <label for="${escapeXmlAttribute(id)}">${escapeXmlAttribute(label)}</label>
+        <input type="text" id="${escapeXmlAttribute(id)}" data-pref="${escapeXmlAttribute(prefKey)}" readonly placeholder="Click to set" class="zenux-input zenux-shortcut-input"${value ? ` value="${escapeXmlAttribute(String(value))}"` : ""} />
+      </div>
+    `;
+  }
+  static infoIcon(tooltip) {
+    return `<span class="zenux-settings-info" data-tooltip="${escapeXmlAttribute(tooltip)}"><img src="chrome://global/skin/icons/info.svg" /></span>`;
+  }
+  static providerGroup({ id, title, headerAfter = "", body = "", hidden = !1 }) {
+    return `
+      <div class="zenux-settings-provider-group"${id ? ` id="${escapeXmlAttribute(id)}"` : ""}${hidden ? " hidden" : ""}>
+        <div class="zenux-settings-provider-head">
+          <h5>${escapeXmlAttribute(title)}</h5>
+          ${headerAfter}
+        </div>
+        ${body}
+      </div>
+    `;
+  }
+  prefRow(item) {
+    let current = this.PREFS.getPref(item.key);
+    switch (item.type || "bool") {
+      case "bool":
+      case "checkbox":
+        return ZenuxSettings.checkboxRow(item.label, item.key, {
+          id: item.id,
+          checked: Boolean(current)
+        });
+      case "number":
+        return ZenuxSettings.numberRow(item.label, item.key, {
+          id: item.id,
+          value: current ?? "",
+          min: item.min,
+          max: item.max,
+          step: item.step,
+          tooltip: item.tooltip
+        });
+      case "password":
+        return ZenuxSettings.textRow(item.label, item.key, {
+          id: item.id,
+          value: current ?? "",
+          placeholder: item.placeholder,
+          maxlength: item.maxlength,
+          password: !0
+        });
+      case "textarea":
+        return ZenuxSettings.textareaRow(item.label, item.key, {
+          id: item.id,
+          value: current ?? "",
+          placeholder: item.placeholder,
+          rows: item.rows
+        });
+      case "select":
+        return ZenuxSettings.selectRow(item.label, item.key, item.options || {}, {
+          id: item.id,
+          value: current ?? ""
+        });
+      case "shortcut":
+        return ZenuxSettings.shortcutRow(item.label, item.key, {
+          id: item.id,
+          value: getPrettyShortcut(current)
+        });
+      case "char":
+      case "text":
+      default:
+        return ZenuxSettings.textRow(item.label, item.key, {
+          id: item.id,
+          value: current ?? "",
+          placeholder: item.placeholder,
+          maxlength: item.maxlength
+        });
+    }
+  }
+  prefAccordion({ title, icon = "", items, expanded = !0, resetPrefs, before = "", after = "" }) {
+    return ZenuxSettings.accordionSection({
+      title,
+      icon,
+      expanded,
+      resetPrefs: resetPrefs ?? items.map((item) => item.key),
+      before,
+      body: items.map((item) => this.prefRow(item)).join(""),
+      after
+    });
+  }
+  controlValue(control) {
+    if (control.type === "checkbox")
+      return control.checked;
+    if (control.type === "number") {
+      let parsed = Number(control.value);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return control.value;
+  }
+  applyValueToControl(control, value) {
+    if (control.type === "checkbox")
+      control.checked = Boolean(value);
+    else if (typeof control.setItems === "function" || control.classList.contains("zenux-combobox"))
+      control.value = value ?? "";
+    else
+      control.value = value ?? "";
+  }
+  syncFromPrefs(root) {
+    root.querySelectorAll("[data-pref]").forEach((control) => {
+      let prefKey = control.dataset.pref;
+      if (control.classList.contains("zenux-shortcut-input"))
+        control.value = getPrettyShortcut(this.PREFS.getPref(prefKey));
+      else
+        this.applyValueToControl(control, this.PREFS.getPref(prefKey));
+      this.values[prefKey] = this.PREFS.getPref(prefKey);
+    });
+  }
+  saveToPrefs() {
+    for (let [prefKey, value] of Object.entries(this.values))
+      try {
+        this.PREFS.setPref(prefKey, value);
+      } catch (e) {
+        this.PREFS.debugError(`Error saving pref for ${prefKey}:`, e);
+      }
+  }
+  resetPrefsIn(root, prefsToReset, onPrefChange) {
+    for (let prefKey of prefsToReset) {
+      if (!prefKey)
+        continue;
+      let defVal = this.PREFS.defaultValues[prefKey], control = root.querySelector(`[data-pref="${prefKey}"]`);
+      if (defVal === void 0) {
+        if (!control)
+          continue;
+        defVal = control.type === "checkbox" ? !1 : control.type === "number" ? 0 : "";
+      }
+      if (this.values[prefKey] = defVal, control)
+        if (control.classList.contains("zenux-shortcut-input"))
+          control.value = getPrettyShortcut(defVal);
+        else
+          this.applyValueToControl(control, defVal);
+      if (typeof onPrefChange === "function")
+        onPrefChange(prefKey, defVal);
+    }
+  }
+  attachAccordion(root) {
+    root.querySelectorAll(".zenux-settings-accordion").forEach((section) => {
+      section.addEventListener("click", (event) => {
+        if (event.target.closest("[data-reset-prefs]"))
+          return;
+        if (section.dataset.expanded === "false") {
+          section.dataset.expanded = "true";
+          return;
+        }
+        if (event.target.closest("[data-accordion-head]"))
+          section.dataset.expanded = "false";
+      });
+    });
+  }
+  attachResetButtons(root, onPrefChange) {
+    root.querySelectorAll("[data-reset-prefs]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation(), this.resetPrefsIn(root, String(btn.dataset.resetPrefs || "").split(","), onPrefChange);
+      });
+    });
+  }
+  attachPrefTracking(root, onPrefChange) {
+    root.querySelectorAll("[data-pref]").forEach((control) => {
+      let prefKey = control.dataset.pref;
+      if (control.classList.contains("zenux-shortcut-input"))
+        return;
+      if (control.classList.contains("zenux-combobox"))
+        control.addEventListener("command", (event) => {
+          if (this.values[prefKey] = event.target.value, typeof onPrefChange === "function")
+            onPrefChange(prefKey, this.values[prefKey]);
+        });
+      else
+        control.addEventListener("change", (event) => {
+          if (this.values[prefKey] = this.controlValue(event.target), typeof onPrefChange === "function")
+            onPrefChange(prefKey, this.values[prefKey]);
+        });
+    });
+  }
+  attachDismiss(overlay, onClose) {
+    this._onClose = onClose, overlay.addEventListener("click", (event) => {
+      if (event.target === overlay)
+        this.close();
+    }), overlay.querySelectorAll("[data-close]").forEach((btn) => {
+      btn.addEventListener("click", () => this.close());
+    }), this._boundEscapeToClose = (event) => {
+      if (event.key === "Escape")
+        this.close();
+    }, window.addEventListener("keydown", this._boundEscapeToClose);
+  }
+  close() {
+    if (window.removeEventListener("keydown", this._boundShortcutKeyDown, !0), this._boundEscapeToClose)
+      window.removeEventListener("keydown", this._boundEscapeToClose), this._boundEscapeToClose = null;
+    if (this._shortcutTarget = null, typeof this._onClose === "function") {
+      let callback = this._onClose;
+      this._onClose = null, callback();
+    }
+  }
+  switchTab(root, tabId) {
+    root.querySelectorAll("[data-tab-content]").forEach((el) => {
+      el.hidden = el.dataset.tabContent !== tabId;
+    }), root.querySelectorAll("[data-tab]").forEach((el) => {
+      el.classList.toggle("is-active", el.dataset.tab === tabId);
+    });
+  }
+  attachTabs(root, initialTab = null) {
+    let tabs = [...root.querySelectorAll("[data-tab]")];
+    if (tabs.forEach((tab) => {
+      tab.addEventListener("click", () => this.switchTab(root, tab.dataset.tab));
+    }), initialTab)
+      this.switchTab(root, initialTab);
+    else if (tabs.length)
+      this.switchTab(root, tabs[0].dataset.tab);
+  }
+  attachShortcutInputs(root) {
+    root.querySelectorAll(".zenux-shortcut-input[data-pref]").forEach((input) => {
+      input.addEventListener("focus", (event) => {
+        this._shortcutTarget = event.target, event.target.classList.add("is-recording"), event.target.placeholder = "Press keys...", window.addEventListener("keydown", this._boundShortcutKeyDown, !0);
+      }), input.addEventListener("blur", () => this._stopShortcutRecording()), input.addEventListener("keydown", (event) => {
+        event.preventDefault(), event.stopPropagation();
+      });
+    });
+  }
+  _stopShortcutRecording() {
+    if (!this._shortcutTarget)
+      return;
+    this._shortcutTarget.classList.remove("is-recording"), this._shortcutTarget.placeholder = "Click to set", this._shortcutTarget = null, window.removeEventListener("keydown", this._boundShortcutKeyDown, !0);
+  }
   _handleShortcutKeyDown(event) {
-    if (!this._currentShortcutTarget)
+    if (!this._shortcutTarget)
       return;
     event.preventDefault(), event.stopPropagation();
-    let targetInput = this._currentShortcutTarget, prefKey = targetInput.dataset.pref;
+    let target = this._shortcutTarget, prefKey = target.dataset.pref;
     if (event.key === "Escape") {
-      targetInput.value = PREFS2.getPref(prefKey), targetInput.classList.remove("recording"), targetInput.placeholder = "Click to set", this._currentShortcutTarget = null, window.removeEventListener("keydown", this._boundHandleShortcutKeyDown, !0);
+      target.value = getPrettyShortcut(this.values[prefKey] ?? this.PREFS.getPref(prefKey)), this._stopShortcutRecording(), target.blur();
       return;
     }
     if (event.key === "Backspace" || event.key === "Delete") {
-      targetInput.value = "", this._currentPrefValues[prefKey] = "", targetInput.classList.remove("recording"), targetInput.placeholder = "Click to set", this._currentShortcutTarget = null, window.removeEventListener("keydown", this._boundHandleShortcutKeyDown, !0);
+      target.value = "", this.values[prefKey] = "", this._stopShortcutRecording(), target.blur();
       return;
     }
-    if (["Control", "Alt", "Shift", "Meta"].includes(event.key))
+    if (MODIFIER_KEYS.includes(event.key))
       return;
-    let shortcutString = eventToShortcutSignature(event);
-    targetInput.value = shortcutString, this._currentPrefValues[prefKey] = shortcutString, PREFS2.debugLog(`Shortcut for ${prefKey} set to: ${shortcutString}`), targetInput.classList.remove("recording"), targetInput.placeholder = "Click to set", this._currentShortcutTarget = null, window.removeEventListener("keydown", this._boundHandleShortcutKeyDown, !0);
+    let shortcut = eventToShortcutSignature(event);
+    target.value = getPrettyShortcut(shortcut), this.values[prefKey] = shortcut, this._stopShortcutRecording(), target.blur();
+  }
+}
+
+// findbar-ai/utils/secure.js
+init_prefs();
+var ENC_PREFIX = "enc1:", _cache = /* @__PURE__ */ new Map;
+function getOSKeyStore() {
+  return ChromeUtils.importESModule("resource://gre/modules/OSKeyStore.sys.mjs").OSKeyStore;
+}
+function isEncryptedValue(value) {
+  return typeof value === "string" && value.startsWith(ENC_PREFIX);
+}
+function isApiKeyPref(prefKey) {
+  return typeof prefKey === "string" && prefKey.endsWith("-api-key");
+}
+function getApiKeyPrefs() {
+  return [
+    PREFS2.MISTRAL_API_KEY,
+    PREFS2.GEMINI_API_KEY,
+    PREFS2.OPENAI_API_KEY,
+    PREFS2.CLAUDE_API_KEY,
+    PREFS2.GROK_API_KEY,
+    PREFS2.PERPLEXITY_API_KEY,
+    PREFS2.CEREBRAS_API_KEY,
+    PREFS2.DEEPSEEK_API_KEY,
+    PREFS2.OPENROUTER_API_KEY,
+    PREFS2.POLLINATIONS_API_KEY,
+    PREFS2.CUSTOM_API_KEY
+  ].filter(Boolean);
+}
+function getCachedApiKey(prefKey) {
+  if (!prefKey)
+    return "";
+  if (_cache.has(prefKey))
+    return _cache.get(prefKey) || "";
+  let raw = PREFS2.getPref(prefKey, "");
+  if (!raw || isEncryptedValue(raw))
+    return "";
+  return raw;
+}
+async function getSecureApiKey(prefKey) {
+  if (!prefKey)
+    return "";
+  if (_cache.has(prefKey))
+    return _cache.get(prefKey) || "";
+  let raw = PREFS2.getPref(prefKey, "");
+  if (!raw)
+    return _cache.set(prefKey, ""), "";
+  if (!isEncryptedValue(raw))
+    return _cache.set(prefKey, raw), migratePlaintextKey(prefKey, raw), raw;
+  try {
+    let decrypted = await getOSKeyStore().decrypt(raw.slice(ENC_PREFIX.length));
+    return _cache.set(prefKey, decrypted || ""), decrypted || "";
+  } catch (e) {
+    return PREFS2.debugError(`Could not decrypt API key for ${prefKey}:`, e), "";
+  }
+}
+async function migratePlaintextKey(prefKey, plainValue) {
+  if (!plainValue)
+    return;
+  try {
+    let encrypted = await getOSKeyStore().encrypt(plainValue);
+    PREFS2.setPref(prefKey, ENC_PREFIX + encrypted), PREFS2.debugLog(`Migrated plaintext API key to encrypted storage: ${prefKey}`);
+  } catch (e) {
+    PREFS2.debugError(`Could not encrypt API key for ${prefKey}, keeping plaintext:`, e);
+  }
+}
+async function setSecureApiKey(prefKey, plainValue) {
+  if (!prefKey)
+    return;
+  let value = typeof plainValue === "string" ? plainValue : "";
+  if (_cache.set(prefKey, value), !value) {
+    PREFS2.setPref(prefKey, "");
+    return;
+  }
+  try {
+    let encrypted = await getOSKeyStore().encrypt(value);
+    PREFS2.setPref(prefKey, ENC_PREFIX + encrypted);
+  } catch (e) {
+    PREFS2.debugError(`OSKeyStore unavailable for ${prefKey}, storing plaintext:`, e), PREFS2.setPref(prefKey, value);
+  }
+}
+async function ensureApiKeysLoaded() {
+  let keys = getApiKeyPrefs();
+  await Promise.all(keys.map((key) => getSecureApiKey(key).catch(() => "")));
+}
+
+// findbar-ai/settings.js
+var SETTINGS_TABS = [
+  {
+    id: "general",
+    label: "General",
+    icon: "chrome://browser/skin/zen-icons/settings.svg"
   },
-  _generateShortcutInputHtml(prefConstant, label) {
-    let currentValue = PREFS2.getPref(prefConstant), prefId = `pref-${prefConstant.toLowerCase().replace(/_/g, "-")}`;
-    return `
-      <div class="setting-item">
-        <label for="${prefId}">${label}</label>
-        <input type="text" id="${prefId}" data-pref="${prefConstant}" value="${escapeXmlAttribute(currentValue)}" readonly placeholder="Click to set" class="shortcut-input" />
-      </div>
-    `;
+  {
+    id: "surfaces",
+    label: "Surfaces",
+    icon: "chrome://browser/skin/zen-icons/sidebar.svg"
   },
-  createModalElement() {
-    this._initShortcutHandler();
-    let settingsHtml = this._generateSettingsHtml(), container = parseElement(settingsHtml);
-    this._modalElement = container;
-    let providerOptionsXUL = Object.entries(browseBotFindbarLLM.AVAILABLE_PROVIDERS).map(([name, provider]) => `<menuitem
-            value="${name}"
-            label="${escapeXmlAttribute(provider.label)}"
-            ${name === PREFS2.llmProvider ? 'selected="true"' : ""}
-            ${provider.faviconUrl ? `image="${escapeXmlAttribute(provider.faviconUrl)}"` : ""}
-          />`).join(""), menulistXul = `
-      <menulist id="pref-llm-provider" data-pref="${PREFS2.LLM_PROVIDER}" value="${PREFS2.llmProvider}">
-        <menupopup>
-          ${providerOptionsXUL}
-        </menupopup>
-      </menulist>`, providerSelectorXulElement = parseElement(menulistXul, "xul"), placeholder = this._modalElement.querySelector("#llm-provider-selector-placeholder");
+  {
+    id: "models",
+    label: "Models",
+    icon: "chrome://browser/skin/zen-icons/passwords.svg"
+  },
+  {
+    id: "prompts",
+    label: "Prompts",
+    icon: "chrome://browser/skin/zen-icons/wand-sparkle.svg"
+  }
+], form = new ZenuxSettings(PREFS2), SettingsModal = {
+  _modalElement: null,
+  _getSafeIdForProvider(providerName) {
+    return providerName.replace(/\./g, "-");
+  },
+  createModalElement(initialTab = "general") {
+    let { bodyHTML, tabs } = this._generateSettingsHtml(), settingsHtml = ZenuxSettings.shell({
+      title: "BrowseBot Settings",
+      bodyHTML,
+      tabs,
+      closeId: "browse-bot-close-settings",
+      saveId: "browse-bot-save-settings",
+      modalClass: "browse-bot-settings-modal"
+    }), container = parseElement(settingsHtml);
+    this._modalElement = container, this._initialTab = initialTab;
+    let providerCombo = createCombobox({
+      id: "pref-llm-provider",
+      attrs: { "data-pref": PREFS2.LLM_PROVIDER },
+      value: PREFS2.llmProvider,
+      items: Object.entries(browseBotFindbarLLM.AVAILABLE_PROVIDERS).map(([name, provider]) => ({
+        value: name,
+        label: provider.label,
+        image: provider.faviconUrl || ""
+      }))
+    }), placeholder = this._modalElement.querySelector("#llm-provider-selector-placeholder");
     if (placeholder)
-      placeholder.replaceWith(providerSelectorXulElement);
+      placeholder.replaceWith(providerCombo);
     for (let [name, provider] of Object.entries(browseBotFindbarLLM.AVAILABLE_PROVIDERS)) {
       let { modelPref: modelPrefKey, model: currentModel } = provider, modelPlaceholder = this._modalElement.querySelector(`#llm-model-selector-placeholder-${this._getSafeIdForProvider(name)}`);
       if (modelPlaceholder) {
-        let modelSelectorElement;
-        if (name === "custom") {
-          let modelInputHtml = `
-            <input type="text" id="pref-${this._getSafeIdForProvider(name)}-model" data-pref="${modelPrefKey}" value="${escapeXmlAttribute(currentModel || "")}" placeholder="e.g. deepseek-chat" />
-          `;
-          modelSelectorElement = parseElement(modelInputHtml, "html");
-        } else {
-          let modelOptionsXUL = provider.AVAILABLE_MODELS.map((model) => `<menuitem
-                  value="${model}"
-                  label="${escapeXmlAttribute(provider.AVAILABLE_MODELS_LABELS[model] || model)}"
-                  ${model === currentModel ? 'selected="true"' : ""}
-                />`).join(""), modelMenulistXul = `
-              <menulist id="pref-${this._getSafeIdForProvider(name)}-model" data-pref="${modelPrefKey}" value="${currentModel}">
-                <menupopup>
-                  ${modelOptionsXUL}
-                </menupopup>
-              </menulist>`;
-          modelSelectorElement = parseElement(modelMenulistXul, "xul");
-        }
+        let modelSelectorElement = createModelField(provider, {
+          id: `pref-${this._getSafeIdForProvider(name)}-model`,
+          value: currentModel,
+          attrs: { "data-pref": modelPrefKey },
+          getApiKey: async () => form.values[provider.apiPref] || await getSecureApiKey(provider.apiPref) || "",
+          onDynamicLoaded: (combo) => {
+            if (combo.value && !form.values[provider.modelPref])
+              form.values[provider.modelPref] = combo.value;
+          }
+        });
         modelPlaceholder.replaceWith(modelSelectorElement);
       }
     }
     return this._attachEventListeners(), container;
   },
+  _onPrefChange(prefKey) {
+    if (prefKey === PREFS2.LLM_PROVIDER)
+      this._updateProviderSpecificSettings(this._modalElement, form.values[prefKey]);
+  },
   _attachEventListeners() {
     if (!this._modalElement)
       return;
-    this._modalElement.querySelector("#close-settings").addEventListener("click", () => {
-      this.hide();
-    }), this._modalElement.querySelector("#save-settings").addEventListener("click", () => {
-      if (this.saveSettings(), this.hide(), browseBotFindbar.enabled)
-        browseBotFindbar.show();
-      else
+    let root = this._modalElement;
+    form.attachDismiss(root, () => this.hide()), form.attachAccordion(root), form.attachTabs(root, this._initialTab || "general"), form.attachResetButtons(root, (prefKey) => this._onPrefChange(prefKey)), form.attachPrefTracking(root, (prefKey) => this._onPrefChange(prefKey)), form.attachShortcutInputs(root), root.querySelector("#browse-bot-save-settings").addEventListener("click", async () => {
+      if (await this.saveSettings(), this.hide(), !browseBotFindbar.enabled)
         browseBotFindbar.destroy();
-    }), this._modalElement.addEventListener("click", (e) => {
-      if (e.target === this._modalElement)
-        this.hide();
-    }), this._modalElement.querySelectorAll(".accordion-header").forEach((header) => {
-      header.addEventListener("click", () => {
-        let section = header.closest(".settings-accordion"), isExpanded = section.dataset.expanded === "true";
-        section.dataset.expanded = isExpanded ? "false" : "true";
-      });
-    }), this._modalElement.querySelectorAll("[data-pref]").forEach((control) => {
-      let prefKey = control.dataset.pref;
-      if (control.type === "checkbox")
-        control.checked = PREFS2.getPref(prefKey);
-      else if (control.tagName.toLowerCase() === "menulist")
-        control.value = PREFS2.getPref(prefKey);
-      else
-        control.value = PREFS2.getPref(prefKey);
-      if (this._currentPrefValues[prefKey] = PREFS2.getPref(prefKey), control.tagName.toLowerCase() === "menulist")
-        control.addEventListener("command", (e) => {
-          if (this._currentPrefValues[prefKey] = e.target.value, PREFS2.debugLog(`Settings form value for ${prefKey} changed to: ${this._currentPrefValues[prefKey]}`), prefKey === PREFS2.LLM_PROVIDER)
-            this._updateProviderSpecificSettings(this._modalElement, this._currentPrefValues[prefKey]);
-        });
-      else
-        control.addEventListener("change", (e) => {
-          if (control.type === "checkbox")
-            this._currentPrefValues[prefKey] = e.target.checked;
-          else if (control.type === "number")
-            try {
-              this._currentPrefValues[prefKey] = Number(e.target.value);
-            } catch {
-              this._currentPrefValues[prefKey] = 0;
-            }
-          else
-            this._currentPrefValues[prefKey] = e.target.value;
-          PREFS2.debugLog(`Settings form value for ${prefKey} changed to: ${this._currentPrefValues[prefKey]}`);
-        });
-    }), this._modalElement.querySelectorAll(".get-api-key-link").forEach((link) => {
+    }), root.querySelectorAll(".get-api-key-link").forEach((link) => {
       link.addEventListener("click", (e) => {
         e.preventDefault();
         let url = e.target.dataset.url;
         if (url)
           openTrustedLinkIn(url, "tab"), this.hide();
       });
-    }), this._modalElement.querySelectorAll(".shortcut-input").forEach((input) => {
-      input.addEventListener("focus", (e) => {
-        this._currentShortcutTarget = e.target, e.target.classList.add("recording"), e.target.placeholder = "Press keys...", window.addEventListener("keydown", this._boundHandleShortcutKeyDown, !0);
-      }), input.addEventListener("blur", () => {
-        if (this._currentShortcutTarget)
-          this._currentShortcutTarget.classList.remove("recording"), this._currentShortcutTarget.placeholder = "Click to set", this._currentShortcutTarget = null, window.removeEventListener("keydown", this._boundHandleShortcutKeyDown, !0);
-      }), input.addEventListener("keydown", (e) => {
-        e.preventDefault(), e.stopPropagation();
-      });
     });
-    let modelInput = this._modalElement.querySelector("#pref-custom-model");
+    let modelInput = root.querySelector("#pref-custom-model");
     if (modelInput)
       modelInput.addEventListener("input", () => {
         modelInput.classList.remove("verify-success", "verify-error");
-        let statusEl = this._modalElement.querySelector('[data-verify-status="custom"]');
+        let statusEl = root.querySelector('[data-verify-status="custom"]');
         if (statusEl)
-          statusEl.className = "verify-model-status", statusEl.textContent = "";
+          statusEl.classList.remove("success", "error"), statusEl.textContent = "";
       });
-    this._modalElement.querySelectorAll(".verify-model-btn").forEach((btn) => {
+    root.querySelectorAll(".verify-model-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        let provider = btn.dataset.verifyModel, statusEl = this._modalElement.querySelector(`[data-verify-status="${provider}"]`), modelInput = this._modalElement.querySelector("#pref-custom-model");
+        let statusEl = root.querySelector('[data-verify-status="custom"]'), customModelInput = root.querySelector("#pref-custom-model");
         if (!statusEl)
           return;
-        let baseUrl = this._currentPrefValues[PREFS2.CUSTOM_BASE_URL] || "", model = this._currentPrefValues[PREFS2.CUSTOM_MODEL] || "", apiKey = this._currentPrefValues[PREFS2.CUSTOM_API_KEY] || "", setError = (msg) => {
-          if (statusEl.textContent = msg, statusEl.className = "verify-model-status error", modelInput)
-            modelInput.classList.remove("verify-success"), modelInput.classList.add("verify-error");
+        let baseUrl = form.values[PREFS2.CUSTOM_BASE_URL] || "", model = form.values[PREFS2.CUSTOM_MODEL] || "", apiKey = form.values[PREFS2.CUSTOM_API_KEY] || "", setError = (msg) => {
+          if (statusEl.textContent = msg, statusEl.classList.remove("success"), statusEl.classList.add("error"), customModelInput)
+            customModelInput.classList.remove("verify-success"), customModelInput.classList.add("verify-error");
         };
         if (!baseUrl) {
           setError("Enter a base URL first");
@@ -837,8 +2691,8 @@ var SettingsModal = {
           setError("Enter a model name");
           return;
         }
-        if (statusEl.textContent = "Verifying...", statusEl.className = "verify-model-status", modelInput)
-          modelInput.classList.remove("verify-success", "verify-error");
+        if (statusEl.textContent = "Verifying...", statusEl.classList.remove("success", "error"), customModelInput)
+          customModelInput.classList.remove("verify-success", "verify-error");
         btn.disabled = !0;
         try {
           let url = `${baseUrl.replace(/\/+$/, "")}/models/${encodeURIComponent(model)}`, headers = { "Content-Type": "application/json" };
@@ -846,8 +2700,8 @@ var SettingsModal = {
             headers.Authorization = `Bearer ${apiKey}`;
           let response = await fetch(url, { headers });
           if (response.ok) {
-            if (statusEl.textContent = `Model "${model}" exists`, statusEl.className = "verify-model-status success", modelInput)
-              modelInput.classList.add("verify-success"), modelInput.classList.remove("verify-error");
+            if (statusEl.textContent = `Model "${model}" exists`, statusEl.classList.remove("error"), statusEl.classList.add("success"), customModelInput)
+              customModelInput.classList.add("verify-success"), customModelInput.classList.remove("verify-error");
           } else if (response.status === 404)
             setError(`Model "${model}" not found`);
           else
@@ -858,126 +2712,102 @@ var SettingsModal = {
           btn.disabled = !1;
         }
       });
-    }), this._updateProviderSpecificSettings(this._modalElement, PREFS2.llmProvider), this._modalElement.querySelectorAll(".reset-section-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation(), btn.dataset.resetPrefs.split(",").forEach((prefKey) => {
-          if (!prefKey)
-            return;
-          let defVal = PREFS2.defaultValues[prefKey];
-          this._currentPrefValues[prefKey] = defVal;
-          let control = this._modalElement.querySelector(`[data-pref="${prefKey}"]`);
-          if (control) {
-            if (control.type === "checkbox")
-              control.checked = defVal;
-            else if (control.tagName.toLowerCase() === "menulist")
-              control.value = defVal;
-            else
-              control.value = defVal;
-            if (prefKey === PREFS2.LLM_PROVIDER)
-              this._updateProviderSpecificSettings(this._modalElement, defVal);
-          }
-        });
-      });
-    });
+    }), this._updateProviderSpecificSettings(root, PREFS2.llmProvider);
   },
-  saveSettings() {
-    for (let prefKey in this._currentPrefValues)
-      if (Object.prototype.hasOwnProperty.call(this._currentPrefValues, prefKey)) {
-        if (prefKey.endsWith("api-key")) {
-          if (this._currentPrefValues[prefKey]) {
-            let maskedKey = "*".repeat(this._currentPrefValues[prefKey].length);
+  async saveSettings() {
+    for (let prefKey in form.values)
+      if (Object.prototype.hasOwnProperty.call(form.values, prefKey)) {
+        if (isApiKeyPref(prefKey)) {
+          if (form.values[prefKey]) {
+            let maskedKey = "*".repeat(String(form.values[prefKey]).length);
             PREFS2.debugLog(`Saving pref ${prefKey} to: ${maskedKey}`);
           }
         } else
-          PREFS2.debugLog(`Saving pref ${prefKey} to: ${this._currentPrefValues[prefKey]}`);
+          PREFS2.debugLog(`Saving pref ${prefKey} to: ${form.values[prefKey]}`);
         try {
-          PREFS2.setPref(prefKey, this._currentPrefValues[prefKey]);
+          if (isApiKeyPref(prefKey))
+            await setSecureApiKey(prefKey, form.values[prefKey] || "");
+          else
+            PREFS2.setPref(prefKey, form.values[prefKey]);
         } catch (e) {
           PREFS2.debugError(`Error Saving pref for ${prefKey} ${e}`);
         }
       }
-    if (!browseBotFindbarLLM.currentProvider.apiKey)
+    let currentProvider = browseBotFindbarLLM.currentProvider;
+    if (!currentProvider.noApiKey && !await currentProvider.getApiKeyAsync())
       browseBotFindbar.expanded = !1;
   },
-  show() {
-    this.createModalElement(), this._modalElement.querySelectorAll("[data-pref]").forEach((control) => {
-      let prefKey = control.dataset.pref;
-      if (control.type === "checkbox")
-        control.checked = PREFS2.getPref(prefKey);
-      else if (control.tagName.toLowerCase() === "menulist")
-        control.value = PREFS2.getPref(prefKey);
-      else
-        control.value = PREFS2.getPref(prefKey);
-      this._currentPrefValues[prefKey] = PREFS2.getPref(prefKey);
-    }), this._updateProviderSpecificSettings(this._modalElement, PREFS2.llmProvider), document.documentElement.appendChild(this._modalElement);
+  isOpen() {
+    return !!this._modalElement?.isConnected;
+  },
+  switchTab(tabId) {
+    if (!this._modalElement)
+      return;
+    form.switchTab(this._modalElement, tabId);
+  },
+  async show(tabId = "general") {
+    if (this.isOpen()) {
+      this.switchTab(tabId);
+      return;
+    }
+    await ensureApiKeysLoaded(), this.createModalElement(tabId), form.syncFromPrefs(this._modalElement);
+    for (let provider of Object.values(browseBotFindbarLLM.AVAILABLE_PROVIDERS)) {
+      if (!provider.apiPref)
+        continue;
+      let decrypted = await getSecureApiKey(provider.apiPref);
+      form.values[provider.apiPref] = decrypted;
+      let input = this._modalElement.querySelector(`[data-pref="${provider.apiPref}"]`);
+      if (input)
+        input.value = decrypted || "";
+    }
+    this._updateProviderSpecificSettings(this._modalElement, PREFS2.llmProvider), document.documentElement.appendChild(this._modalElement);
   },
   hide() {
-    if (this._modalElement && this._modalElement.parentNode)
+    if (form.close(), this._modalElement && this._modalElement.parentNode)
       this._modalElement.remove();
+    this._modalElement = null, this._initialTab = null;
   },
   _updateProviderSpecificSettings(container, selectedProviderName) {
-    container.querySelectorAll(".provider-settings-group").forEach((group) => {
-      group.style.display = "none";
+    container.querySelectorAll(".zenux-settings-provider-group").forEach((group) => {
+      group.hidden = !0;
     });
     let activeGroup = container.querySelector(`#${this._getSafeIdForProvider(selectedProviderName)}-settings-group`);
     if (activeGroup) {
-      activeGroup.style.display = "block";
+      activeGroup.hidden = !1;
       let modelPrefKey = PREFS2[`${selectedProviderName.toUpperCase()}_MODEL`];
       if (modelPrefKey) {
         let modelSelect = activeGroup.querySelector(`#pref-${this._getSafeIdForProvider(selectedProviderName)}-model`);
         if (modelSelect)
-          modelSelect.value = this._currentPrefValues[modelPrefKey] || PREFS2.getPref(modelPrefKey);
+          modelSelect.value = form.values[modelPrefKey] || PREFS2.getPref(modelPrefKey);
       }
       let provider = browseBotFindbarLLM.AVAILABLE_PROVIDERS[selectedProviderName], getApiKeyLink = activeGroup.querySelector(".get-api-key-link");
       if (getApiKeyLink)
         if (provider.apiKeyUrl)
-          getApiKeyLink.style.display = "inline-block", getApiKeyLink.dataset.url = provider.apiKeyUrl;
+          getApiKeyLink.hidden = !1, getApiKeyLink.dataset.url = provider.apiKeyUrl;
         else
-          getApiKeyLink.style.display = "none", delete getApiKeyLink.dataset.url;
+          getApiKeyLink.hidden = !0, delete getApiKeyLink.dataset.url;
     }
   },
-  _generateCheckboxSettingHtml(label, prefConstant) {
-    let prefId = `pref-${prefConstant.toLowerCase().replace(/_/g, "-")}`;
-    return `
-      <div class="setting-item">
-        <label for="${prefId}">${label}</label>
-        <input type="checkbox" id="${prefId}" data-pref="${prefConstant}" />
-      </div>
-    `;
-  },
-  _generateNumberSettingHtml(label, prefConstant, min, max, step, tooltip) {
-    let prefId = `pref-${prefConstant.toLowerCase().replace(/_/g, "-")}`, infoIconHtml = tooltip ? `<span class="info-icon-wrapper" data-tooltip="${escapeXmlAttribute(tooltip)}"><img class="info-icon" src="chrome://global/skin/icons/info.svg" /></span>` : "";
-    return `
-      <div class="setting-item">
-        <label for="${prefId}" style="display: flex; align-items: center; gap: 6px;">
-          ${label}
-          ${infoIconHtml}
-        </label>
-        <input type="number" id="${prefId}" data-pref="${prefConstant}" min="${min}" max="${max}" step="${step}" />
-      </div>
-    `;
-  },
-  _createCheckboxSectionHtml(title, settingsArray, expanded = !0, contentBefore = "", contentAfter = "", resetPrefs = []) {
-    let settingsHtml = settingsArray.map((s) => {
+  _checkboxSection(title, settingsArray, expanded = !0, contentBefore = "", contentAfter = "", resetPrefs = null, icon = "") {
+    let body = settingsArray.map((s) => {
       if (s.type === "number")
-        return this._generateNumberSettingHtml(s.label, s.pref, s.min, s.max, s.step, s.tooltip);
-      return this._generateCheckboxSettingHtml(s.label, s.pref);
-    }).join(""), prefsToReset = (resetPrefs.length > 0 ? resetPrefs : settingsArray.map((s) => s.pref)).join(",");
-    return `
-    <section class="settings-section settings-accordion" data-expanded="${expanded}" >
-      <h4 class="accordion-header">
-        ${title}
-        <div class="reset-section-btn" data-reset-prefs="${prefsToReset}" title="Reset Section" role="button">
-            <img src="chrome://global/skin/icons/reload.svg" />
-        </div>
-      </h4>
-      <div class="accordion-content">
-        ${contentBefore}
-        ${settingsHtml}
-        ${contentAfter}
-      </div>
-    </section>
-  `;
+        return ZenuxSettings.numberRow(s.label, s.pref, {
+          min: s.min,
+          max: s.max,
+          step: s.step,
+          tooltip: s.tooltip
+        });
+      return ZenuxSettings.checkboxRow(s.label, s.pref);
+    }).join("");
+    return ZenuxSettings.accordionSection({
+      title,
+      icon,
+      expanded,
+      resetPrefs: resetPrefs ?? settingsArray.map((s) => s.pref),
+      before: contentBefore,
+      body,
+      after: contentAfter
+    });
   },
   _generateSettingsHtml() {
     let findbarSettings = [
@@ -986,167 +2816,168 @@ var SettingsModal = {
       { label: "Persist Chat (don't persist when browser closes)", pref: PREFS2.PERSIST },
       { label: "Enable Drag and Drop", pref: PREFS2.DND_ENABLED },
       { label: "Remember Dimensions", pref: PREFS2.REMEMBER_DIMENSIONS }
-    ], positionOptionsHTML = Object.entries({
-      "top-left": "Top Left",
-      "top-right": "Top Right",
-      "bottom-left": "Bottom Left",
-      "bottom-right": "Bottom Right"
-    }).map(([value, label]) => `<option value="${value}">${escapeXmlAttribute(label)}</option>`).join(""), positionSelectorHtml = `
-      <div class="setting-item">
-        <label for="pref-position">Position</label>
-        <select id="pref-position" data-pref="${PREFS2.POSITION}">
-          ${positionOptionsHTML}
-        </select>
-      </div>
-    `, backgroundStyleOptionsHTML = Object.entries({
-      solid: "Solid",
-      acrylic: "Acrylic",
-      pseudo: "Pseudo"
-    }).map(([value, label]) => `<option value="${value}">${escapeXmlAttribute(label)}</option>`).join(""), backgroundStyleSelectorHtml = `
-      <div class="setting-item">
-        <label for="pref-background-style">Background Style</label>
-        <select id="pref-background-style" data-pref="${PREFS2.BACKGROUND_STYLE}">
-          ${backgroundStyleOptionsHTML}
-        </select>
-      </div>
-    `, findbarResetPrefs = [
-      ...findbarSettings.map((s) => s.pref),
-      PREFS2.POSITION,
-      PREFS2.BACKGROUND_STYLE
-    ], findbarSectionHtml = this._createCheckboxSectionHtml("Findbar AI", findbarSettings, !0, "", positionSelectorHtml + backgroundStyleSelectorHtml, findbarResetPrefs), urlbarSettings = [
+    ], findbarSectionHtml = this._checkboxSection("Findbar AI", findbarSettings, !0, "", [
+      ZenuxSettings.selectRow("Position", PREFS2.POSITION, {
+        "top-left": "Top Left",
+        "top-right": "Top Right",
+        "bottom-left": "Bottom Left",
+        "bottom-right": "Bottom Right"
+      }, { id: "pref-position" }),
+      ZenuxSettings.selectRow("Background Style", PREFS2.BACKGROUND_STYLE, {
+        solid: "Solid",
+        acrylic: "Acrylic",
+        pseudo: "Pseudo"
+      }, { id: "pref-background-style" })
+    ].join(""), [...findbarSettings.map((s) => s.pref), PREFS2.POSITION, PREFS2.BACKGROUND_STYLE], "chrome://browser/skin/zen-icons/search-glass.svg"), urlbarSettings = [
       { label: "Enable URLBar AI", pref: PREFS2.URLBAR_AI_ENABLED },
       { label: "Enable Animations", pref: PREFS2.URLBAR_AI_ANIMATIONS_ENABLED },
       { label: "Hide Suggestions", pref: PREFS2.URLBAR_AI_HIDE_SUGGESTIONS }
-    ], urlbarSectionHtml = this._createCheckboxSectionHtml("URLBar AI", urlbarSettings, !1, "", "", urlbarSettings.map((s) => s.pref)), shortcutFindbarHtml = this._generateShortcutInputHtml(PREFS2.SHORTCUT_FINDBAR, "Open Findbar AI"), shortcutUrlbarHtml = this._generateShortcutInputHtml(PREFS2.SHORTCUT_URLBAR, "Toggle URLBar AI"), shortcutsSectionHtml = `
-      <section class="settings-section settings-accordion" data-expanded="true">
-        <h4 class="accordion-header">
-          Keyboard Shortcuts
-          <div class="reset-section-btn" data-reset-prefs="${PREFS2.SHORTCUT_FINDBAR},${PREFS2.SHORTCUT_URLBAR}" title="Reset Section" role="button">
-            <img src="chrome://global/skin/icons/reload.svg" />
-          </div>
-        </h4>
-        <div class="accordion-content">
-          ${shortcutFindbarHtml}
-          ${shortcutUrlbarHtml}
-        </div>
-      </section>
-    `, aiBehaviorSettings = [
+    ], urlbarSectionHtml = this._checkboxSection("URLBar AI", urlbarSettings, !1, "", "", null, "chrome://browser/skin/zen-icons/link.svg"), librarySettings = [
+      { label: "Enable Library AI", pref: PREFS2.LIBRARY_ENABLED },
+      { label: "Ask before tool call", pref: PREFS2.CONFIRMATION },
+      {
+        label: "Max Tool Calls (0 = unlimited)",
+        pref: PREFS2.MAX_TOOL_CALLS,
+        type: "number",
+        min: 0
+      }
+    ], librarySectionHtml = this._checkboxSection("Library AI", librarySettings, !0, ZenuxSettings.selectRow("Mode", PREFS2.LIBRARY_MODE, {
+      chat: "Chat (no tools, no page context)",
+      agent: "Agent (full browser tool-belt)",
+      build: "Build (Create mods)"
+    }, { id: "pref-library-mode" }), "", [...librarySettings.map((s) => s.pref), PREFS2.LIBRARY_MODE], "chrome://browser/skin/zen-icons/library.svg"), shortcutsSectionHtml = ZenuxSettings.accordionSection({
+      title: "Keyboard Shortcuts",
+      icon: svgToUrl(icons.keyboard),
+      expanded: !0,
+      resetPrefs: [PREFS2.SHORTCUT_FINDBAR, PREFS2.SHORTCUT_URLBAR, PREFS2.SHORTCUT_LIBRARY],
+      body: [
+        ZenuxSettings.shortcutRow("Open Findbar AI", PREFS2.SHORTCUT_FINDBAR),
+        ZenuxSettings.shortcutRow("Toggle URLBar AI", PREFS2.SHORTCUT_URLBAR),
+        ZenuxSettings.shortcutRow("Open BrowseBot Library", PREFS2.SHORTCUT_LIBRARY)
+      ].join("")
+    }), aiBehaviorSettings = [
       { label: "Enable Citations", pref: PREFS2.CITATIONS_ENABLED },
       { label: "Stream Response", pref: PREFS2.STREAM_ENABLED },
-      { label: "Agentic Mode (AI can use tool calls)", pref: PREFS2.AGENTIC_MODE },
-      { label: "Conformation before tool call", pref: PREFS2.CONFORMATION }
-    ], aiBehaviorWarningHtml = `
-      <div id="citations-agentic-mode-warning" class="warning-message" >
-        Warning: Enabling both Citations and Agentic Mode may lead to unexpected behavior or errors.
-      </div>
-    `, maxToolCallsHtml = `
-   <div class="setting-item">
-     <label for="pref-max-tool-calls">Max Tool Calls (Maximum number of messages to send AI back to back)</label>
-     <input type="number" id="pref-max-tool-calls" data-pref="${PREFS2.MAX_TOOL_CALLS}" />
-   </div>
- `, customSystemPromptHtml = `
-   <div class="setting-item">
-     <label for="pref-custom-system-prompt">Custom System Prompt</label>
-     <textarea id="pref-custom-system-prompt" data-pref="${PREFS2.CUSTOM_SYSTEM_PROMPT}" rows="3" placeholder="Pretend like ...."></textarea>
-   </div>
- `, aiBehaviorResetPrefs = [
-      ...aiBehaviorSettings.map((s) => s.pref),
-      PREFS2.MAX_TOOL_CALLS,
-      PREFS2.CUSTOM_SYSTEM_PROMPT
-    ], aiBehaviorSectionHtml = this._createCheckboxSectionHtml("AI Behavior", aiBehaviorSettings, !0, `
-      <div id="citations-agentic-mode-warning" class="warning-message" >
-        Warning: Enabling both Citations and Agentic Mode may lead to unexpected behavior or errors.
-      </div>
-    `, maxToolCallsHtml + customSystemPromptHtml, aiBehaviorResetPrefs), contextMenuSettings = [
+      {
+        label: "Max Context Chars (0 = unlimited)",
+        pref: PREFS2.MAX_CONTEXT_CHARS,
+        type: "number",
+        step: 1000,
+        min: 0,
+        max: 200000,
+        tooltip: "Maximum page or transcript characters sent to the AI per message."
+      }
+    ], aiBehaviorSectionHtml = ZenuxSettings.accordionSection({
+      title: "AI Behavior",
+      icon: "chrome://browser/skin/zen-icons/sparkles.svg",
+      expanded: !0,
+      resetPrefs: aiBehaviorSettings.map((s) => s.pref),
+      body: aiBehaviorSettings.map((s) => {
+        if (s.type === "number")
+          return ZenuxSettings.numberRow(s.label, s.pref, {
+            min: s.min,
+            max: s.max,
+            step: s.step,
+            tooltip: s.tooltip
+          });
+        return ZenuxSettings.checkboxRow(s.label, s.pref);
+      }).join("")
+    }), systemPromptRows = [
+      ["Findbar AI", PREFS2.FINDBAR_SYSTEM_PROMPT],
+      ["URL Bar AI", PREFS2.URLBAR_SYSTEM_PROMPT],
+      ["Library Chat Mode", PREFS2.LIBRARY_CHAT_SYSTEM_PROMPT],
+      ["Library Agent Mode", PREFS2.LIBRARY_AGENT_SYSTEM_PROMPT],
+      ["Library Build Mode", PREFS2.LIBRARY_BUILD_SYSTEM_PROMPT]
+    ], systemPromptsSectionHtml = ZenuxSettings.accordionSection({
+      title: "System Prompts",
+      icon: "chrome://browser/skin/zen-icons/wand-sparkle.svg",
+      expanded: !0,
+      resetPrefs: systemPromptRows.map(([, pref]) => pref),
+      body: systemPromptRows.map(([label, pref]) => ZenuxSettings.textareaRow(label, pref, { placeholder: "Pretend like ....", rows: 3 })).join("")
+    }), contextMenuSettings = [
       { label: "Enable Context Menu (right click menu)", pref: PREFS2.CONTEXT_MENU_ENABLED },
       {
         label: "Auto Send from Context Menu",
         pref: PREFS2.CONTEXT_MENU_AUTOSEND
       }
-    ], contextMenuCommandsHtml = `
-      <div class="setting-item">
-        <label for="pref-context-menu-command-no-selection">Command when no text is selected</label>
-        <textarea id="pref-context-menu-command-no-selection" data-pref="${PREFS2.CONTEXT_MENU_COMMAND_NO_SELECTION}" rows="3"></textarea>
-      </div>
-      <div class="setting-item">
-        <label for="pref-context-menu-command-with-selection">Command when text is selected. Use {selection} for the selected text.</label>
-        <textarea id="pref-context-menu-command-with-selection" data-pref="${PREFS2.CONTEXT_MENU_COMMAND_WITH_SELECTION}" rows="3"></textarea>
-      </div>
-    `, contextMenuResetPrefs = [
-      ...contextMenuSettings.map((s) => s.pref),
-      PREFS2.CONTEXT_MENU_COMMAND_NO_SELECTION,
-      PREFS2.CONTEXT_MENU_COMMAND_WITH_SELECTION
-    ], contextMenuSectionHtml = this._createCheckboxSectionHtml("Context Menu", contextMenuSettings, !1, "", contextMenuCommandsHtml, contextMenuResetPrefs), llmProviderSettingsHtml = "";
+    ], contextMenuCommandsHtml = [
+      ZenuxSettings.textareaRow("Command when no text is selected", PREFS2.CONTEXT_MENU_COMMAND_NO_SELECTION, { rows: 3, id: "pref-context-menu-command-no-selection" }),
+      ZenuxSettings.textareaRow("Command when text is selected. Use {selection} for the selected text.", PREFS2.CONTEXT_MENU_COMMAND_WITH_SELECTION, { rows: 3, id: "pref-context-menu-command-with-selection" })
+    ].join(""), contextMenuSectionHtml = ZenuxSettings.accordionSection({
+      title: "Context Menu",
+      icon: "chrome://global/skin/icons/cursor-arrow.svg",
+      expanded: !1,
+      resetPrefs: [
+        ...contextMenuSettings.map((s) => s.pref),
+        PREFS2.CONTEXT_MENU_COMMAND_NO_SELECTION,
+        PREFS2.CONTEXT_MENU_COMMAND_WITH_SELECTION
+      ],
+      body: contextMenuSettings.map((s) => ZenuxSettings.checkboxRow(s.label, s.pref)).join(""),
+      after: contextMenuCommandsHtml
+    }), llmProviderSettingsHtml = "";
     for (let [name, provider] of Object.entries(browseBotFindbarLLM.AVAILABLE_PROVIDERS)) {
       let modelPrefKey = provider.modelPref, apiInputHtml;
-      if (name === "ollama")
-        apiInputHtml = `
-        <div class="setting-item">
-          <label for="pref-ollama-base-url">Base URL</label>
-          <input type="text" id="pref-ollama-base-url" data-pref="${PREFS2.OLLAMA_BASE_URL}" placeholder="http://localhost:11434/api" />
-        </div>
-      `;
-      else if (name === "custom") {
-        let baseUrlPrefKey = PREFS2.CUSTOM_BASE_URL, apiPrefKey = PREFS2.CUSTOM_API_KEY;
-        apiInputHtml = `
-        <div class="setting-item">
-          <label for="pref-custom-base-url">Base URL</label>
-          <input type="text" id="pref-custom-base-url" data-pref="${baseUrlPrefKey}" placeholder="https://api.your-provider.com/v1" />
-        </div>
-        <div class="setting-item">
-          <label for="pref-custom-api-key">API Key</label>
-          <input type="password" id="pref-custom-api-key" data-pref="${apiPrefKey}" placeholder="Enter Custom API Key" />
-        </div>
-      `;
-      } else {
-        let apiPrefKey = PREFS2[`${name.toUpperCase()}_API_KEY`];
-        apiInputHtml = apiPrefKey ? `
-        <div class="setting-item">
-          <label for="pref-${this._getSafeIdForProvider(name)}-api-key">API Key</label>
-          <input type="password" id="pref-${this._getSafeIdForProvider(name)}-api-key" data-pref="${apiPrefKey}" placeholder="Enter ${provider.label} API Key" />
-        </div>
-      ` : "";
+      if (provider.baseUrlPref) {
+        let baseUrlPrefKey = provider.baseUrlPref, safeId = this._getSafeIdForProvider(name);
+        apiInputHtml = ZenuxSettings.textRow("Base URL", baseUrlPrefKey, {
+          placeholder: "http://localhost:11434/api",
+          id: `pref-${safeId}-base-url`
+        });
+      } else if (name === "custom")
+        apiInputHtml = [
+          ZenuxSettings.textRow("Base URL", PREFS2.CUSTOM_BASE_URL, {
+            placeholder: "https://api.your-provider.com/v1",
+            id: "pref-custom-base-url"
+          }),
+          ZenuxSettings.textRow("API Key", PREFS2.CUSTOM_API_KEY, {
+            placeholder: "Enter Custom API Key",
+            password: !0,
+            id: "pref-custom-api-key"
+          })
+        ].join("");
+      else {
+        let apiPrefKey = PREFS2[`${name.toUpperCase()}_API_KEY`], keyLabel = name === "pollinations" ? "API Key (optional)" : "API Key", keyPlaceholder = name === "pollinations" ? "Optional, unlocks more models and tool use" : `Enter ${provider.label} API Key`;
+        apiInputHtml = apiPrefKey ? ZenuxSettings.textRow(keyLabel, apiPrefKey, {
+          placeholder: keyPlaceholder,
+          password: !0,
+          id: `pref-${this._getSafeIdForProvider(name)}-api-key`
+        }) : "";
       }
       let modelSelectPlaceholderHtml = modelPrefKey ? `
-        <div class="setting-item" data-provider-model="${name}">
+        <div class="zenux-setting-item" data-provider-model="${escapeXmlAttribute(name)}">
           <label for="pref-${this._getSafeIdForProvider(name)}-model">Model</label>
           <div class="model-input-row">
             <div id="llm-model-selector-placeholder-${this._getSafeIdForProvider(name)}"></div>
-            ${name === "custom" ? '<button class="verify-model-btn" data-verify-model="custom">Verify</button>' : ""}
+             ${name === "custom" ? '<button class="verify-model-btn zenux-btn-ghost" data-verify-model="custom">Verify</button>' : ""}
           </div>
           ${name === "custom" ? '<span class="verify-model-status" data-verify-status="custom"></span>' : ""}
         </div>
       ` : "";
-      llmProviderSettingsHtml += `
-        <div id="${this._getSafeIdForProvider(name)}-settings-group" class="provider-settings-group">
-          <div class="provider-header-group">
-            <h5>${provider.label}</h5>
-            <button class="get-api-key-link" data-url="${provider.apiKeyUrl || ""}" style="display: ${provider.apiKeyUrl ? "inline-block" : "none"};">Get API Key</button>
-          </div>
-          ${apiInputHtml}
-          ${modelSelectPlaceholderHtml}
-        </div>
-      `;
+      llmProviderSettingsHtml += ZenuxSettings.providerGroup({
+        id: `${this._getSafeIdForProvider(name)}-settings-group`,
+        title: provider.label,
+        headerAfter: `<button class="get-api-key-link zenux-btn-ghost" data-url="${escapeXmlAttribute(provider.apiKeyUrl || "")}"${provider.apiKeyUrl ? "" : " hidden"}>Get API Key</button>`,
+        body: apiInputHtml + modelSelectPlaceholderHtml
+      });
     }
-    let llmProvidersSectionHtml = `
-      <section class="settings-section settings-accordion" data-expanded="false">
-        <h4 class="accordion-header">
-            LLM Providers
-            <div class="reset-section-btn" data-reset-prefs="${[
+    let llmProvidersResetPrefs = [
       PREFS2.LLM_PROVIDER,
       PREFS2.OLLAMA_BASE_URL,
       PREFS2.CUSTOM_BASE_URL,
       ...Object.values(browseBotFindbarLLM.AVAILABLE_PROVIDERS).flatMap((p) => [p.modelPref, PREFS2[`${p.name.toUpperCase()}_API_KEY`]]).filter(Boolean)
-    ].join(",")}" title="Reset Section" role="button">
-                <img src="chrome://global/skin/icons/reload.svg" />
-            </div>
-        </h4>
-        <div class="setting-item accordion-content" class="">
+    ], llmProvidersSectionHtml = ZenuxSettings.accordionSection({
+      title: "LLM Providers",
+      icon: "chrome://browser/skin/zen-icons/passwords.svg",
+      expanded: !0,
+      resetPrefs: llmProvidersResetPrefs,
+      body: `
+        <div class="zenux-setting-item">
           <label for="pref-llm-provider">Select Provider</label>
           <div id="llm-provider-selector-placeholder"></div>
         </div>
         ${llmProviderSettingsHtml}
-      </section>`, advancedLLMSettings = [
+      `
+    }), advancedLLMSettings = [
       {
         label: "Temperature",
         pref: PREFS2.LLM_TEMPERATURE,
@@ -1157,7 +2988,7 @@ var SettingsModal = {
         tooltip: "Controls randomness. Lower values are more deterministic."
       },
       {
-        label: "Top P  -----",
+        label: "Top P",
         pref: PREFS2.LLM_TOP_P,
         type: "number",
         step: 0.1,
@@ -1166,7 +2997,7 @@ var SettingsModal = {
         tooltip: "Nucleus sampling. Limits token selection to top cumulative probability."
       },
       {
-        label: "Top K  ----- ",
+        label: "Top K",
         pref: PREFS2.LLM_TOP_K,
         type: "number",
         step: 1,
@@ -1201,7 +3032,7 @@ var SettingsModal = {
         max: 32000,
         tooltip: "Maximum number of tokens to generate."
       }
-    ], advancedLLMResetPrefs = advancedLLMSettings.map((s) => s.pref), advancedLLMSectionHtml = this._createCheckboxSectionHtml("Advanced LLM Settings", advancedLLMSettings, !1, "", "", advancedLLMResetPrefs), browserFindbarSettings = [
+    ], advancedLLMSectionHtml = this._checkboxSection("Advanced LLM Settings", advancedLLMSettings, !0, "", "", null, "chrome://browser/skin/zen-icons/sliders.svg"), browserFindbarSettings = [
       { label: "Find as you Type", pref: "accessibility.typeaheadfind" },
       {
         label: "Enable sound (when word not found)",
@@ -1209,37 +3040,1916 @@ var SettingsModal = {
       },
       { label: "Entire Word", pref: "findbar.entireword" },
       { label: "Highlight All", pref: "findbar.highlightAll" }
-    ], browserSettingsHtml = this._createCheckboxSectionHtml("Browser Findbar", browserFindbarSettings, !1, "", "", browserFindbarSettings.map((s) => s.pref)), devSettings = [{ label: "Debug Mode (logs in console)", pref: PREFS2.DEBUG_MODE }], devSectionHtml = this._createCheckboxSectionHtml("Development", devSettings, !1);
-    return `
-      <div id="ai-settings-modal-overlay">
-        <div class="browse-bot-settings-modal">
-          <div class="ai-settings-header">
-            <h3>Settings</h3>
-            <div>
-              <button id="close-settings" class="settings-close-btn">Close</button>
-              <button id="save-settings" class="settings-save-btn">Save</button>
-            </div>
-          </div>
-          <div class="ai-settings-content">
-            ${findbarSectionHtml}
-            ${urlbarSectionHtml}
-            ${shortcutsSectionHtml}
-            ${aiBehaviorSectionHtml}
-            ${contextMenuSectionHtml}
-            ${llmProvidersSectionHtml}
-            ${advancedLLMSectionHtml}
-            ${browserSettingsHtml}
-            ${devSectionHtml}
-          </div>
-        </div>
-      </div>
-    `;
+    ], browserSettingsHtml = this._checkboxSection("Browser Findbar", browserFindbarSettings, !1, "", "", null, "chrome://global/skin/icons/search-glass.svg"), devSettings = [{ label: "Debug Mode (logs in console)", pref: PREFS2.DEBUG_MODE }], devSectionHtml = this._checkboxSection("Development", devSettings, !1, "", "", null, "chrome://browser/skin/zen-icons/developer.svg"), tabContent = (id, sections) => `<div data-tab-content="${id}" hidden>${sections.join("")}</div>`;
+    return { bodyHTML: [
+      tabContent("general", [shortcutsSectionHtml, aiBehaviorSectionHtml, devSectionHtml]),
+      tabContent("surfaces", [
+        findbarSectionHtml,
+        urlbarSectionHtml,
+        librarySectionHtml,
+        contextMenuSectionHtml,
+        browserSettingsHtml
+      ]),
+      tabContent("models", [llmProvidersSectionHtml, advancedLLMSectionHtml]),
+      tabContent("prompts", [systemPromptsSectionHtml])
+    ].join(""), tabs: SETTINGS_TABS };
   }
 };
 
+// findbar-ai/findbar-ai.uc.js
+init_pref();
+var getSidebarWidth = () => {
+  if (gZenCompactModeManager && (!gZenCompactModeManager?.preference || !PREFS2.getPref("zen.view.compact.hide-tabbar")) && !gZenCompactModeManager.sidebarIsOnRight)
+    return gZenCompactModeManager.getAndApplySidebarWidth();
+  else
+    return 0;
+};
+function updateSidebarWidth() {
+  if (!PREFS2.pseudoBg)
+    return;
+  let mainWindow = document.getElementById("main-window"), width = getSidebarWidth();
+  if (width)
+    mainWindow.style.setProperty("--zen-sidebar-width", width + "px");
+  setTimeout(() => browseBotFindbar._updateFindbarDimensions(), 2);
+}
+var sidebarWidthUpdate = function() {
+  let mainWindow = document.getElementById("main-window"), attributes = ["zen-compact-mode", "zen-sidebar-expanded", "zen-right-side"];
+  new MutationObserver((mutationsList) => {
+    if (!PREFS2.pseudoBg)
+      return;
+    for (let mutation of mutationsList)
+      if (mutation.type === "attributes" && attributes.includes(mutation.attributeName))
+        updateSidebarWidth();
+  }).observe(mainWindow, {
+    attributes: !0,
+    attributeFilter: attributes
+  }), updateSidebarWidth();
+};
+sidebarWidthUpdate();
+function renderCitationMarkers(answer, citations) {
+  let byId = new Map((citations || []).map((c) => [String(c.id), c]));
+  return String(answer).replace(/\[(\d+|\d{1,3}:\d{2}(?::\d{2})?)\]/g, (match, ref) => {
+    let ts = byId.get(ref)?.timestamp ?? (/:/.test(ref) ? ref : null), tsAttr = ts ? ` data-timestamp="${escapeXmlAttribute(String(ts))}"` : "", label = ts ? `[${escapeXmlAttribute(String(ts))}]` : `[${ref}]`;
+    return `<span class="citation-link" data-citation-id="${ref}"${tsAttr}>${label}</span>`;
+  });
+}
+PREFS2.setInitialPrefs();
+var browseBotFindbar = {
+  findbar: null,
+  expandButton: null,
+  chatContainer: null,
+  apiKeyContainer: null,
+  _updateFindbar: null,
+  _addKeymaps: null,
+  _handleInputKeyPress: null,
+  _handleFindFieldInput: null,
+  _handleFindbarOpenEvent: null,
+  _handleFindbarCloseEvent: null,
+  _isExpanded: !1,
+  _updateContextMenuText: null,
+  _backgroundStylesListener: null,
+  _citationsListener: null,
+  _contextMenuEnabledListener: null,
+  _persistListener: null,
+  _minimalListener: null,
+  _dndListener: null,
+  contextMenuItem: null,
+  _contextMenuRetryTimer: null,
+  _handleContextMenuClick: null,
+  _matchesObserver: null,
+  _isDragging: !1,
+  _startDrag: null,
+  _stopDrag: null,
+  _handleDrag: null,
+  _initialContainerCoor: { x: null, y: null },
+  _initialMouseCoor: { x: null, y: null },
+  _startWidth: null,
+  _resizeHandle: null,
+  _isResizing: !1,
+  _startResize: null,
+  _stopResize: null,
+  _handleResize: null,
+  _handleResizeEnd: null,
+  _highlightTimeout: null,
+  _originalOnMatchesCountResult: null,
+  _updateFindbarDimensions() {
+    if (!this.findbar) {
+      document.documentElement.style.removeProperty("--findbar-width"), document.documentElement.style.removeProperty("--findbar-height"), document.documentElement.style.removeProperty("--findbar-x"), document.documentElement.style.removeProperty("--findbar-y");
+      return;
+    }
+    let rect = this.findbar.getBoundingClientRect();
+    if (!rect.width || !rect.height)
+      return;
+    let _findbarDimension = { width: rect.width, height: rect.height }, _findbarCoors = { x: rect.left, y: rect.top };
+    document.documentElement.style.setProperty("--findbar-width", `${_findbarDimension.width}px`), document.documentElement.style.setProperty("--findbar-height", `${_findbarDimension.height}px`), document.documentElement.style.setProperty("--findbar-x", `${_findbarCoors.x}px`), document.documentElement.style.setProperty("--findbar-y", `${_findbarCoors.y}px`), this.findbar.style.setProperty("--findbar-width", `${_findbarDimension.width}px`), this.findbar.style.setProperty("--findbar-height", `${_findbarDimension.height}px`);
+  },
+  _saveFindbarDimensions() {
+    if (!this.findbar || !PREFS2.rememberDimensions)
+      return;
+    let rect = this.findbar.getBoundingClientRect();
+    PREFS2.width = rect.width;
+  },
+  _applyFindbarDimensions() {
+    if (!this.findbar || !PREFS2.rememberDimensions)
+      return;
+    let width = PREFS2.width;
+    if (width)
+      this.findbar.style.width = `${width}px`;
+  },
+  _isStreaming: !1,
+  _abortController: null,
+  get expanded() {
+    return this._isExpanded;
+  },
+  set expanded(value) {
+    let isChanged = value !== this._isExpanded;
+    if (this._isExpanded = value, !this.findbar)
+      return;
+    if (this.findbar.expanded = value, isChanged)
+      setTimeout(() => this._updateFindbarDimensions(), 2), setTimeout(() => this._updateFindbarDimensions(), 20);
+    if (value) {
+      if (this.findbar.classList.add("ai-expanded"), this.show(), this.showAIInterface(), isChanged)
+        this.focusPrompt();
+      let messagesContainer = this?.chatContainer?.querySelector("#chat-messages");
+      if (messagesContainer)
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    } else {
+      if (this._isStreaming)
+        this._abortController?.abort();
+      if (this.findbar.classList.remove("ai-expanded"), this.removeAIInterface(), isChanged && !this.minimal)
+        this.focusInput();
+    }
+  },
+  get enabled() {
+    return PREFS2.enabled;
+  },
+  set enabled(value) {
+    if (typeof value === "boolean")
+      PREFS2.enabled = value;
+  },
+  handleEnabledChange(enabled) {
+    if (enabled.value)
+      this.init();
+    else
+      this.destroy();
+  },
+  get minimal() {
+    return PREFS2.minimal;
+  },
+  set minimal(value) {
+    if (typeof value === "boolean")
+      PREFS2.minimal = value;
+  },
+  handleMinimalPrefChange: function() {
+    this.removeExpandButton(), this.addExpandButton(), this.removeAIInterface(), this.showAIInterface();
+  },
+  updateFindbar() {
+    if (SettingsModal.hide(), this.removeExpandButton(), this.removeAIInterface(), this.disableResize(), !PREFS2.persistChat)
+      this.hide(), this.expanded = !1, this.clear();
+    gBrowser.getFindBar().then((findbar) => {
+      if (this.findbar = findbar, this._dimensionsObserver)
+        this._dimensionsObserver.disconnect();
+      if (this._dimensionsObserver = new ResizeObserver(() => this._updateFindbarDimensions()), this._dimensionsObserver.observe(findbar), this._applyFindbarDimensions(), this.addExpandButton(), PREFS2.persistChat) {
+        if (this?.findbar?.history) {
+          if (browseBotFindbarLLM.history = this.findbar.history, this?.findbar?.aiStatus && JSON.stringify(this.aiStatus) !== JSON.stringify(this.findbar.aiStatus))
+            browseBotFindbarLLM.history = [], this.findbar.history = [];
+        } else
+          browseBotFindbarLLM.history = [];
+        if (this?.findbar?.expanded && !this?.findbar?.hidden)
+          setTimeout(() => this.expanded = !0, 200);
+        else
+          this.hide(), this.expanded = !1;
+      } else
+        this.hide(), this.expanded = !1;
+      this.updateFindbarStatus(), setTimeout(() => {
+        if (PREFS2.dndEnabled)
+          this.enableResize();
+        this._updateFindbarDimensions();
+      }, 0);
+      let matches = this.findbar.querySelector(".found-matches"), status = this.findbar.querySelector(".findbar-find-status"), wrapper = this.findbar.querySelector('hbox[anonid="findbar-textbox-wrapper"]');
+      if (wrapper) {
+        if (matches && matches.parentElement !== wrapper)
+          wrapper.appendChild(matches);
+        if (status && status.parentElement !== wrapper)
+          wrapper.appendChild(status);
+      }
+      this.findbar._findField.removeEventListener("keypress", this._handleInputKeyPress), this.findbar._findField.addEventListener("keypress", this._handleInputKeyPress), this.findbar._findField.removeEventListener("input", this._handleFindFieldInput), this.findbar._findField.addEventListener("input", this._handleFindFieldInput);
+    });
+  },
+  highlight(word) {
+    if (!this.findbar)
+      return;
+    if (this._highlightTimeout)
+      clearTimeout(this._highlightTimeout);
+    this.findbar._find(word), this._highlightTimeout = setTimeout(() => {
+      this.findbar.browser.finder.highlight(!1), this._highlightTimeout = null;
+    }, 2000);
+  },
+  show() {
+    if (!this.findbar)
+      return !1;
+    return this.findbar.open(), this.focusInput(), setTimeout(() => this._updateFindbarDimensions(), 0), !0;
+  },
+  hide() {
+    if (!this.findbar)
+      return !1;
+    return this.findbar.close(), this.findbar.toggleHighlight(!1), setTimeout(() => this._updateFindbarDimensions(), 0), !0;
+  },
+  toggleVisibility() {
+    if (!this.findbar)
+      return;
+    if (this.findbar.hidden)
+      this.show();
+    else
+      this.hide();
+  },
+  clear() {
+    if (browseBotFindbarLLM.clearData(), this.findbar)
+      this.findbar.history = null;
+    let messages = this?.chatContainer?.querySelector("#chat-messages");
+    if (messages)
+      messages.innerHTML = "";
+    setTimeout(() => this._updateFindbarDimensions(), 1);
+  },
+  aiStatus: {
+    citationsEnabled: PREFS2.citationsEnabled
+  },
+  updateFindbarStatus() {
+    if (this.aiStatus = {
+      citationsEnabled: PREFS2.citationsEnabled
+    }, this.findbar)
+      this.findbar.aiStatus = this.aiStatus;
+  },
+  createAPIKeyInterface() {
+    let currentProviderName = browseBotFindbarLLM.currentProvider.name, providerSelectorXulElement = createCombobox({
+      id: "provider-selector",
+      value: currentProviderName,
+      items: Object.entries(browseBotFindbarLLM.AVAILABLE_PROVIDERS).map(([name, provider]) => ({
+        value: name,
+        label: provider.label,
+        image: provider.faviconUrl || ""
+      }))
+    }), html = `
+        <div class="browse-bot-setup">
+          <div class="ai-setup-content">
+            <h3>AI Setup Required</h3>
+            <p>To use AI features, you need to set up your API key and select a provider.</p>
+            <div class="provider-selection-group">
+              <label for="provider-selector">Select Provider:</label>
+            </div>
+            <div class="api-key-input-group">
+              <input type="text" id="base-url" class="api-input zenux-input" placeholder="Enter API Endpoint (e.g. https://api.your-provider.com/v1)" />
+              <input type="text" id="model-name" class="api-input zenux-input" placeholder="Enter Model Name (e.g. deepseek-chat)" />
+              <div id="model-selector-wrap"></div>
+              <div class="api-key-row">
+                <input type="password" id="api-key" class="zenux-input" placeholder="Enter your API key" />
+              </div>
+              <span class="setup-error" id="setup-error"></span>
+            </div>
+            <div class="api-key-links">
+              <button id="get-api-key-link" class="zenux-btn-ghost">Get API Key</button>
+              <button id="save-api-key" class="zenux-btn-primary">Save</button>
+            </div>
+          </div>
+        </div>`, container = parseElement(`
+        <div class="browse-bot-setup">
+          <div class="ai-setup-content">
+            <h3>AI Setup Required</h3>
+            <p>To use AI features, you need to set up your API key and select a provider.</p>
+            <div class="provider-selection-group">
+              <label for="provider-selector">Select Provider:</label>
+            </div>
+            <div class="api-key-input-group">
+              <input type="text" id="base-url" class="api-input zenux-input" placeholder="Enter API Endpoint (e.g. https://api.your-provider.com/v1)" />
+              <input type="text" id="model-name" class="api-input zenux-input" placeholder="Enter Model Name (e.g. deepseek-chat)" />
+              <div id="model-selector-wrap"></div>
+              <div class="api-key-row">
+                <input type="password" id="api-key" class="zenux-input" placeholder="Enter your API key" />
+              </div>
+              <span class="setup-error" id="setup-error"></span>
+            </div>
+            <div class="api-key-links">
+              <button id="get-api-key-link" class="zenux-btn-ghost">Get API Key</button>
+              <button id="save-api-key" class="zenux-btn-primary">Save</button>
+            </div>
+          </div>
+        </div>`);
+    container.querySelector(".provider-selection-group").appendChild(providerSelectorXulElement);
+    let providerSelector = container.querySelector("#provider-selector"), input = container.querySelector("#api-key"), saveBtn = container.querySelector("#save-api-key"), getApiKeyLink = container.querySelector("#get-api-key-link"), description = container.querySelector(".ai-setup-content").querySelector("p"), modelCombo = null, setupError = () => container.querySelector("#setup-error"), setSetupError = (msg) => {
+      let el = setupError();
+      if (el)
+        el.textContent = msg || "";
+    }, syncModelField = (provider) => {
+      let wrap = container.querySelector("#model-selector-wrap"), modelNameInput = container.querySelector("#model-name");
+      if (!wrap)
+        return;
+      if (modelCombo)
+        modelCombo.remove(), modelCombo = null;
+      if (provider.customModel && typeof provider.refreshModels !== "function") {
+        if (wrap.classList.add("hidden"), modelNameInput?.classList.remove("hidden"), modelNameInput)
+          modelNameInput.value = provider.modelPref && PREFS2.getPref(provider.modelPref) || "", modelNameInput.placeholder = provider.modelPlaceholder || "Enter Model Name (e.g. deepseek-chat)";
+        return;
+      }
+      modelNameInput?.classList.add("hidden"), wrap.classList.remove("hidden");
+      let field = createModelField(provider, {
+        id: "model-selector",
+        getApiKey: async () => container.querySelector("#api-key")?.value.trim() || await getSecureApiKey(provider.apiPref) || "",
+        isCurrent: () => modelCombo === field
+      });
+      modelCombo = field, wrap.appendChild(modelCombo);
+    }, updateUIForProvider = async (providerName) => {
+      let provider = browseBotFindbarLLM.AVAILABLE_PROVIDERS[providerName];
+      if (!provider)
+        return;
+      let baseUrlInput = container.querySelector("#base-url"), apiKeyRow = container.querySelector(".api-key-row");
+      setSetupError("");
+      let needsBaseUrl = Boolean(provider.baseUrlPref) || providerName === "custom", needsApiKey = !provider.noApiKey;
+      if (needsBaseUrl) {
+        if (baseUrlInput?.classList.remove("hidden"), baseUrlInput) {
+          let baseUrlPrefKey = provider.baseUrlPref || (providerName === "custom" ? PREFS2.CUSTOM_BASE_URL : null);
+          baseUrlInput.value = baseUrlPrefKey && PREFS2.getPref(baseUrlPrefKey) || "", baseUrlInput.placeholder = providerName === "custom" ? "Enter API Endpoint (e.g. https://api.your-provider.com/v1)" : "Enter API Endpoint (e.g. http://localhost:11434/api)";
+        }
+      } else
+        baseUrlInput?.classList.add("hidden");
+      if (syncModelField(provider), needsApiKey)
+        apiKeyRow?.classList.remove("hidden"), input.value = await provider.getApiKeyAsync?.() ?? provider.apiKey ?? "", input.placeholder = `Enter your ${provider.label} API key`;
+      else
+        apiKeyRow?.classList.add("hidden");
+      if (provider.noApiKey)
+        description.textContent = providerName === "ollama" ? "Ollama is selected. Configure the Base URL and Model name below, then press Save." : `${provider.label} is free and needs no API key. Enter a model name below, then press Save.`;
+      else if (providerName === "custom")
+        description.textContent = "Custom Provider is selected. Please enter the API Endpoint, Model name, and your API Key, then press Save.";
+      else if (provider.customModel)
+        description.textContent = `Enter your ${provider.label} API key and a model name below, then press Save.`;
+      else
+        description.textContent = "To use AI features, enter your API key and pick a model, then press Save.";
+      getApiKeyLink.style.display = provider.apiKeyUrl ? "inline-block" : "none", getApiKeyLink.disabled = !provider.apiKeyUrl, getApiKeyLink.title = provider.apiKeyUrl ? "Get API Key" : "No API key link available for this provider.";
+    };
+    return updateUIForProvider(currentProviderName), providerSelector.addEventListener("command", (e) => {
+      let selectedProviderName = e.target.value;
+      browseBotFindbarLLM.setProvider(selectedProviderName), updateUIForProvider(selectedProviderName);
+    }), getApiKeyLink.addEventListener("click", () => {
+      openTrustedLinkIn(browseBotFindbarLLM.currentProvider.apiKeyUrl, "tab");
+    }), saveBtn.addEventListener("click", async () => {
+      let provider = browseBotFindbarLLM.currentProvider;
+      if (!provider)
+        return;
+      let providerName = provider.name, baseUrlInput = container.querySelector("#base-url"), modelNameInput = container.querySelector("#model-name"), needsBaseUrl = Boolean(provider.baseUrlPref) || providerName === "custom", needsApiKey = !provider.noApiKey, needsModelText = Boolean(provider.customModel) && typeof provider.refreshModels !== "function", baseUrl = baseUrlInput ? baseUrlInput.value.trim() : "", modelText = modelNameInput ? modelNameInput.value.trim() : "", apiKey = input.value.trim(), dropdownModel = modelCombo ? modelCombo.value : "";
+      if (needsBaseUrl && !baseUrl) {
+        setSetupError("Enter a base URL first"), baseUrlInput?.focus();
+        return;
+      }
+      if (needsModelText && !modelText) {
+        setSetupError("Enter a model name"), modelNameInput?.focus();
+        return;
+      }
+      if (!needsModelText && !dropdownModel) {
+        setSetupError("Select a model"), modelCombo?.focus();
+        return;
+      }
+      if (needsApiKey && !apiKey) {
+        setSetupError(`Enter your ${provider.label} API key`), input.focus();
+        return;
+      }
+      if (setSetupError(""), needsBaseUrl && baseUrl) {
+        let baseUrlPrefKey = provider.baseUrlPref || (providerName === "custom" ? PREFS2.CUSTOM_BASE_URL : null);
+        if (baseUrlPrefKey)
+          PREFS2.setPref(baseUrlPrefKey, baseUrl);
+      }
+      if (needsModelText) {
+        if (modelText && provider.modelPref)
+          PREFS2.setPref(provider.modelPref, modelText);
+      } else if (dropdownModel && provider.modelPref)
+        PREFS2.setPref(provider.modelPref, dropdownModel);
+      if (needsApiKey && apiKey)
+        await provider.setApiKeyAsync(apiKey);
+      this.showAIInterface();
+    }), [input, container.querySelector("#base-url"), container.querySelector("#model-name")].forEach((el) => {
+      el?.addEventListener("input", () => setSetupError("")), el?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter")
+          saveBtn.click();
+      });
+    }), container;
+  },
+  async sendMessage(prompt) {
+    if (!prompt || this._isStreaming)
+      return;
+    this.show(), this.expanded = !0, this.addChatMessage({ role: "user", content: prompt });
+    let messagesContainer = this.chatContainer.querySelector("#chat-messages");
+    this._abortController = new AbortController, this._toggleStreamingControls(!0);
+    let aiMessageDiv = parseElement(`<div class="chat-message chat-message-ai">
+        <div class="message-content">
+          <div class="markdown-body"></div>
+        </div>
+      </div>`), contentDiv = aiMessageDiv.querySelector(".markdown-body");
+    if (messagesContainer)
+      messagesContainer.appendChild(aiMessageDiv), messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    try {
+      let resultPromise = browseBotFindbarLLM.sendMessage(prompt, this._abortController.signal);
+      if (PREFS2.citationsEnabled || !PREFS2.streamEnabled) {
+        let loadingIndicator = this.createLoadingIndicator();
+        messagesContainer.appendChild(loadingIndicator), messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        try {
+          let result = await resultPromise;
+          if (loadingIndicator.parentNode)
+            loadingIndicator.remove();
+          if (PREFS2.citationsEnabled) {
+            let { answer, citations } = result;
+            if (this._isPollinationsBalanceExhausted(answer))
+              this._flagPollinationsKeyPrompt(), this._renderPollinationsKeyPrompt(contentDiv);
+            else if (citations && citations.length > 0)
+              aiMessageDiv.dataset.citations = JSON.stringify(citations);
+            let textToParse = renderCitationMarkers(answer, citations);
+            contentDiv.appendChild(parseMD(textToParse));
+          } else if (this._isPollinationsBalanceExhausted(result.text))
+            this._flagPollinationsKeyPrompt(), this._renderPollinationsKeyPrompt(contentDiv);
+          else if (result.text.trim() === "")
+            aiMessageDiv.remove();
+          else
+            contentDiv.appendChild(parseMD(result.text));
+        } finally {
+          if (loadingIndicator.parentNode)
+            loadingIndicator.remove();
+          messagesContainer.scrollTop = messagesContainer.scrollHeight, setTimeout(() => this._updateFindbarDimensions(), 0);
+        }
+      } else {
+        let loadingIndicator = this.createLoadingIndicator();
+        messagesContainer.appendChild(loadingIndicator), messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        let result = await resultPromise, fullText = "";
+        try {
+          let renderStream = () => {
+            if (renderStreamText(contentDiv, fullText), setTimeout(() => this._updateFindbarDimensions(), 0), messagesContainer)
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          };
+          for await (let delta of result.textStream) {
+            if (loadingIndicator.parentNode)
+              loadingIndicator.remove();
+            fullText += delta, renderStream();
+          }
+          try {
+            let finalText = await result.text;
+            if (typeof finalText === "string")
+              fullText = finalText;
+          } catch (e) {
+            PREFS2.debugError("Failed to resolve final stream text:", e.message);
+          }
+          if (renderStream(), this._isPollinationsBalanceExhausted(fullText))
+            this._flagPollinationsKeyPrompt(), this._renderPollinationsKeyPrompt(contentDiv);
+          else if (fullText.trim() === "")
+            aiMessageDiv.remove();
+        } finally {
+          if (loadingIndicator.parentNode)
+            loadingIndicator.remove();
+        }
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        if (PREFS2.debugError("Error sending message:", e), aiMessageDiv)
+          aiMessageDiv.remove();
+        let errorText = extractErrorText(e);
+        if (this._isPollinationsBalanceExhausted(errorText))
+          browseBotFindbarLLM.history.push({
+            role: "assistant",
+            content: "",
+            pollinationsKeyPrompt: !0
+          }), this.addChatMessage({ role: "assistant", content: "", pollinationsKeyPrompt: !0 });
+        else
+          this.addChatMessage({ role: "error", content: errorText });
+      } else if (PREFS2.debugLog("Streaming aborted by user."), contentDiv && contentDiv.textContent.trim())
+        contentDiv.appendChild(parseMD("_Stopped_"));
+      else if (aiMessageDiv)
+        aiMessageDiv.remove();
+    } finally {
+      if (aiMessageDiv.isConnected)
+        attachMessageActions(aiMessageDiv, {
+          onRegenerate: (wrap) => this.regenerateFrom(wrap)
+        });
+      this._toggleStreamingControls(!1), this._abortController = null;
+    }
+  },
+  regenerateFrom(wrap) {
+    if (!wrap?.isConnected || this._isStreaming)
+      return;
+    let messagesContainer = this.chatContainer?.querySelector("#chat-messages");
+    if (!messagesContainer)
+      return;
+    let userWraps = [...messagesContainer.querySelectorAll(".chat-message-user")], userWrap = null;
+    if (wrap.classList.contains("chat-message-user"))
+      userWrap = wrap;
+    else {
+      let prev = wrap.previousElementSibling;
+      while (prev) {
+        if (prev.classList?.contains("chat-message-user")) {
+          userWrap = prev;
+          break;
+        }
+        prev = prev.previousElementSibling;
+      }
+    }
+    if (!userWrap)
+      return;
+    let ordinal = userWraps.indexOf(userWrap);
+    if (ordinal < 0)
+      return;
+    let history = browseBotFindbarLLM.getHistory(), userEntries = history.filter((m) => !m.pageContext && m.role === "user");
+    if (ordinal >= userEntries.length)
+      return;
+    let target = userEntries[ordinal], prompt = String(target.content || "").trim();
+    if (!prompt)
+      return;
+    browseBotFindbarLLM.setHistory(history.slice(0, history.indexOf(target)));
+    let node = userWrap;
+    while (node) {
+      let next = node.nextSibling;
+      node.remove(), node = next;
+    }
+    this.sendMessage(prompt);
+  },
+  _toggleStreamingControls(isStreaming) {
+    if (this._isStreaming = isStreaming, !this.chatContainer)
+      return;
+    let sendBtn = this.chatContainer.querySelector("#send-prompt"), stopBtn = this.chatContainer.querySelector("#stop-generation");
+    setStreamingControls({ sendBtn, stopBtn }, isStreaming, () => this.focusPrompt());
+  },
+  _overrideFindbarMatchesDisplay(retry = 0) {
+    if (PREFS2.debugLog(`_overrideFindbarMatchesDisplay called, retry: ${retry}`), this._originalOnMatchesCountResult) {
+      PREFS2.debugLog("Prototype already overridden.");
+      return;
+    }
+    let findbarClass = customElements.get("findbar")?.prototype;
+    if (!findbarClass) {
+      if (PREFS2.debugLog("findbarClass not found."), retry < 10)
+        setTimeout(() => this._overrideFindbarMatchesDisplay(retry + 1), 100), PREFS2.debugLog(`Retrying _overrideFindbarMatchesDisplay in 100ms, retry: ${retry + 1}`);
+      else
+        PREFS2.debugError("Failed to override findbar matches display: findbar custom element not found after multiple retries.");
+      return;
+    }
+    PREFS2.debugLog("findbarClass found. Overriding onMatchesCountResult."), this._originalOnMatchesCountResult = findbarClass.onMatchesCountResult, findbarClass.onMatchesCountResult = function(result) {
+      if (!PREFS2.enabled)
+        return;
+      let foundMatchesElement = this._foundMatches;
+      if (typeof result?.current !== "number" || typeof result?.total !== "number")
+        return;
+      let next = this.querySelector(".findbar-find-next"), previous = this.querySelector(".findbar-find-previous");
+      if (next && previous)
+        if (result.searchString.trim() === "" || result.total <= 1)
+          next.disabled = !0, previous.disabled = !0;
+        else if (result.current <= 1)
+          next.disabled = !1, previous.disabled = !0;
+        else if (result.current >= result.total)
+          next.disabled = !0, previous.disabled = !1;
+        else
+          next.disabled = !1, previous.disabled = !1;
+      if (!foundMatchesElement)
+        return;
+      if (result.searchString.trim() === "") {
+        foundMatchesElement.setAttribute("value", "");
+        return;
+      }
+      foundMatchesElement.hidden = !1;
+      let newLabel = `${result.current}/${result.total}`;
+      foundMatchesElement.setAttribute("value", newLabel);
+    }, PREFS2.debugLog("onMatchesCountResult successfully overridden.");
+  },
+  _restoreFindbarMatchesDisplay() {
+    if (this._originalOnMatchesCountResult) {
+      let findbarClass = customElements.get("findbar")?.prototype;
+      if (findbarClass)
+        findbarClass.onMatchesCountResult = this._originalOnMatchesCountResult;
+      if (this._originalOnMatchesCountResult = null, this.findbar) {
+        let foundMatchesElement = this.findbar._foundMatches;
+        if (foundMatchesElement)
+          foundMatchesElement.setAttribute("value", ""), foundMatchesElement.hidden = !0;
+      }
+    }
+  },
+  createChatInterface() {
+    let container = parseElement(`
+        <div class="browse-bot-chat">
+          <div class="ai-chat-header">
+            <div class="findbar-drag-handle"></div>
+          </div>
+          <div class="ai-chat-messages" id="chat-messages"></div>
+          <div class="ai-chat-input-group">
+          <textarea id="ai-prompt" placeholder="Ask AI anything..." rows="2"></textarea>
+          <button id="send-prompt" class="send-btn zenux-btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M17.991 6.01L5.399 10.563l4.195 2.428l3.699-3.7a1 1 0 0 1 1.414 1.415l-3.7 3.7l2.43 4.194L17.99 6.01Zm.323-2.244c1.195-.433 2.353.725 1.92 1.92l-5.282 14.605c-.434 1.198-2.07 1.344-2.709.241l-3.217-5.558l-5.558-3.217c-1.103-.639-.957-2.275.241-2.709z" />
+            </svg>
+          </button>
+          <button id="stop-generation" class="stop-btn zenux-btn-primary" style="display: none;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12S6.477 2 12 2m2 6h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2" />
+              </svg>
+          </button>
+        </div>
+        </div>`), chatHeader = container.querySelector(".ai-chat-header"), clearBtn = parseElement(`
+        <toolbarbutton 
+          id="clear-chat" 
+          class="clear-chat-btn zenux-icon-btn" 
+          image="chrome://global/skin/icons/delete.svg" 
+          tooltiptext="Clear Chat"
+        />`, "xul"), settingsBtn = parseElement(`
+        <toolbarbutton 
+          id="open-settings-btn" 
+          class="settings-btn zenux-icon-btn" 
+          image="chrome://global/skin/icons/settings.svg" 
+          tooltiptext="Settings"
+        />`, "xul"), collapseBtn = parseElement(`
+        <toolbarbutton 
+          id="findbar-collapse-btn" 
+          class="findbar-collapse-btn zenux-icon-btn" 
+          image="chrome://browser/skin/zen-icons/unpin.svg" 
+          tooltiptext="Collapse"
+        />`, "xul");
+    chatHeader.appendChild(clearBtn), chatHeader.appendChild(settingsBtn), chatHeader.appendChild(collapseBtn);
+    let chatMessages = container.querySelector("#chat-messages"), promptInput = container.querySelector("#ai-prompt"), sendBtn = container.querySelector("#send-prompt"), stopBtn = container.querySelector("#stop-generation"), handleSend = () => {
+      let prompt = promptInput.value.trim();
+      this.sendMessage(prompt), promptInput.value = "";
+    };
+    sendBtn.addEventListener("click", handleSend), stopBtn.addEventListener("click", () => {
+      this._abortController?.abort();
+    }), promptInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey)
+        e.preventDefault(), handleSend();
+    }), clearBtn.addEventListener("click", () => {
+      this.clear(), this.expanded = !1;
+    }), settingsBtn.addEventListener("click", () => {
+      SettingsModal.show();
+    }), collapseBtn.addEventListener("click", () => {
+      this.expanded = !1;
+    });
+    let copyBlockCode = async (copyButton) => {
+      let codeEl = copyButton.closest(".zh-codeblock")?.querySelector("pre code");
+      if (!codeEl)
+        return;
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent), copyButton.textContent = "Copied!";
+      } catch {
+        copyButton.textContent = "Copy failed";
+      }
+      setTimeout(() => {
+        copyButton.textContent = "Copy";
+      }, 1500);
+    }, openChatLink = (e) => {
+      let anchor = e.target?.closest?.("a[href]");
+      if (!anchor)
+        return;
+      e.preventDefault();
+      try {
+        openTrustedLinkIn(anchor.href, "tab");
+      } catch {}
+    };
+    return chatMessages.addEventListener("click", async (e) => {
+      let copyButton = e.target.closest?.(".zh-codeblock-copy");
+      if (copyButton) {
+        copyBlockCode(copyButton);
+        return;
+      }
+      let button = e.target.closest?.(".citation-link");
+      if (button) {
+        if (button.dataset.timestamp) {
+          let seconds = timestampToSeconds(button.dataset.timestamp);
+          if (seconds !== null)
+            messageManagerAPI.seekVideo(seconds);
+          return;
+        }
+        let citationId = button.dataset.citationId, messageEl = button.closest(".chat-message[data-citations]");
+        if (messageEl) {
+          let citation = JSON.parse(messageEl.dataset.citations).find((c) => c.id == citationId);
+          if (citation && citation.source_quote)
+            PREFS2.debugLog(`Citation [${citationId}] clicked. Requesting highlight for:`, citation.source_quote), this.highlight(citation.source_quote);
+        }
+      } else
+        openChatLink(e);
+    }), chatMessages.addEventListener("auxclick", (e) => {
+      if (e.button === 1)
+        openChatLink(e);
+    }), chatMessages.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ")
+        return;
+      let copyButton = e.target.closest?.(".zh-codeblock-copy");
+      if (copyButton)
+        e.preventDefault(), copyBlockCode(copyButton);
+    }), container;
+  },
+  createLoadingIndicator() {
+    return parseElement(`<div class="chat-message chat-message-loading"><div class="message-content">${icons.toolLoading}Loading...</div></div>`);
+  },
+  _isPollinationsBalanceExhausted(text) {
+    return isProviderBalanceExhausted(browseBotFindbarLLM.currentProvider, text);
+  },
+  _flagPollinationsKeyPrompt() {
+    let history = browseBotFindbarLLM.history;
+    for (let i = history.length - 1;i >= 0; i--)
+      if (history[i]?.role === "assistant") {
+        history[i].pollinationsKeyPrompt = !0;
+        break;
+      }
+  },
+  _renderPollinationsKeyPrompt(contentDiv) {
+    contentDiv.replaceChildren();
+    let keyUrl = browseBotFindbarLLM.currentProvider?.apiKeyUrl || "https://enter.pollinations.ai/keys", promptEl = parseElement(`
+      <div class="pollinations-key-prompt">
+        <p>Pollinations ran out of free credits for this request (anonymous tier).
+          <a href="${escapeXmlAttribute(keyUrl)}">Get a free API key</a>,
+          paste it below, and send your message again. The key stays optional.</p>
+        <div class="pollinations-key-row">
+          <input type="password" class="zenux-input" placeholder="Paste Pollinations API key" />
+          <button class="zenux-btn-primary">Save</button>
+        </div>
+        <span class="key-prompt-status"></span>
+      </div>`), input = promptEl.querySelector("input"), saveBtn = promptEl.querySelector("button"), status = promptEl.querySelector(".key-prompt-status");
+    saveBtn.addEventListener("click", async () => {
+      let key = input.value.trim();
+      if (!key) {
+        status.textContent = "Paste your API key first.";
+        return;
+      }
+      saveBtn.disabled = !0;
+      try {
+        await browseBotFindbarLLM.currentProvider.setApiKeyAsync(key), input.value = "", status.textContent = "Saved. Send your message again to retry with your key.";
+      } catch (e) {
+        PREFS2.debugError("Could not save Pollinations API key:", e), status.textContent = "Could not save the key, try again.";
+      } finally {
+        saveBtn.disabled = !1, setTimeout(() => this._updateFindbarDimensions(), 0);
+      }
+    }), input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter")
+        saveBtn.click();
+    }), input.addEventListener("input", () => {
+      status.textContent = "";
+    }), contentDiv.appendChild(promptEl), setTimeout(() => this._updateFindbarDimensions(), 0);
+  },
+  addChatMessage(message) {
+    let { role, content: content2 } = message;
+    if (!this.chatContainer || content2 === void 0 || content2 === null)
+      return;
+    let messagesContainer = this.chatContainer.querySelector("#chat-messages");
+    if (!messagesContainer)
+      return;
+    if (message.pollinationsKeyPrompt && browseBotFindbarLLM.currentProvider?.name === "pollinations") {
+      let promptDiv = parseElement('<div class="chat-message chat-message-ai"></div>'), promptContent = parseElement('<div class="message-content"></div>');
+      promptDiv.appendChild(promptContent), messagesContainer.appendChild(promptDiv), this._renderPollinationsKeyPrompt(promptContent), messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      return;
+    }
+    let type;
+    switch (role) {
+      case "user":
+        type = "user";
+        break;
+      case "assistant":
+        type = "ai";
+        break;
+      case "error":
+        type = "error";
+        break;
+      default:
+        return;
+    }
+    let messageDiv = parseElement(`<div class="chat-message chat-message-${type}"></div>`), contentDiv = parseElement('<div class="message-content"></div>');
+    if (role === "assistant" && typeof content2 === "object" && content2.answer !== void 0) {
+      let { answer, citations } = content2;
+      if (citations && citations.length > 0)
+        messageDiv.dataset.citations = JSON.stringify(citations);
+      let textToParse = renderCitationMarkers(answer, citations);
+      contentDiv.appendChild(parseMD(textToParse));
+    } else {
+      let textContent = typeof content2 === "string" ? content2 : content2[0]?.text ?? "";
+      if (role === "assistant" && PREFS2.citationsEnabled) {
+        let { answer, citations } = browseBotFindbarLLM.parseModelResponseText(textContent);
+        if (citations && citations.length > 0)
+          messageDiv.dataset.citations = JSON.stringify(citations);
+        let textToParse = renderCitationMarkers(answer, citations);
+        contentDiv.appendChild(parseMD(textToParse));
+      } else
+        contentDiv.appendChild(parseMD(textContent));
+    }
+    messageDiv.appendChild(contentDiv), attachMessageActions(messageDiv, {
+      onRegenerate: (wrap) => this.regenerateFrom(wrap)
+    }), messagesContainer.appendChild(messageDiv), messagesContainer.scrollTop = messagesContainer.scrollHeight, setTimeout(() => this._updateFindbarDimensions(), 10);
+  },
+  _needsSetup() {
+    let provider = browseBotFindbarLLM.currentProvider;
+    if (!provider)
+      return !0;
+    if (provider.name === "custom")
+      return !PREFS2.getPref(PREFS2.CUSTOM_BASE_URL) || !PREFS2.getPref(provider.modelPref) || !provider.apiKey;
+    if (provider.noApiKey)
+      return provider.baseUrlPref && !PREFS2.getPref(provider.baseUrlPref) || !PREFS2.getPref(provider.modelPref);
+    if (provider.customModel && !PREFS2.getPref(provider.modelPref))
+      return !0;
+    return !provider.apiKey;
+  },
+  showAIInterface() {
+    if (!this.findbar)
+      return;
+    if (this.removeAIInterface(), this.findbar.classList.remove("ai-settings-active"), this._needsSetup())
+      this.apiKeyContainer = this.createAPIKeyInterface(), this.findbar.insertBefore(this.apiKeyContainer, this.findbar.firstChild);
+    else {
+      if (this.chatContainer = this.createChatInterface(), PREFS2.dndEnabled)
+        this.enableDND();
+      let history = browseBotFindbarLLM.getHistory();
+      for (let message of history) {
+        if (message.pageContext)
+          continue;
+        this.addChatMessage(message);
+      }
+      this.findbar.insertBefore(this.chatContainer, this.findbar.firstChild);
+    }
+    setTimeout(() => this._updateFindbarDimensions(), 10);
+  },
+  focusInput() {
+    if (this.findbar)
+      setTimeout(() => this.findbar._findField.focus(), 10);
+  },
+  focusPrompt() {
+    let promptInput = this.chatContainer?.querySelector("#ai-prompt");
+    if (promptInput)
+      setTimeout(() => promptInput.focus(), 10);
+  },
+  setPromptText(text) {
+    let promptInput = this?.chatContainer?.querySelector("#ai-prompt");
+    if (promptInput && text)
+      promptInput.value = text;
+  },
+  async setPromptTextFromSelection() {
+    let text, selection = await messageManagerAPI.getSelectedText();
+    if (!selection || !selection.hasSelection)
+      text = this?.findbar?._findField?.value;
+    else
+      text = selection.selectedText;
+    this.setPromptText(text);
+  },
+  removeAIInterface() {
+    if (this.apiKeyContainer)
+      this.apiKeyContainer.remove(), this.apiKeyContainer = null;
+    if (this.chatContainer)
+      this.chatContainer.remove(), this.chatContainer = null;
+  },
+  init() {
+    if (!this.enabled)
+      return;
+    if (this.updateFindbar(), this.addListeners(), PREFS2.contextMenuEnabled)
+      this.addContextMenuItem();
+    this._overrideFindbarMatchesDisplay();
+  },
+  destroy() {
+    this.findbar?.style.removeProperty("--findbar-width"), this.findbar?.style.removeProperty("--findbar-height"), this.findbar = null, this._dimensionsObserver?.disconnect(), this._dimensionsObserver = null, setTimeout(() => this._updateFindbarDimensions(), 10), this.expanded = !1;
+    try {
+      this.removeListeners();
+    } catch {}
+    this.removeExpandButton(), this.removeContextMenuItem(), this.removeAIInterface(), SettingsModal.hide(), this._restoreFindbarMatchesDisplay();
+  },
+  addExpandButton() {
+    if (!this.findbar)
+      return !1;
+    if (this.removeExpandButton(), this.minimal) {
+      let container = this.findbar.querySelector(".findbar-container");
+      if (container && !container.querySelector("#findbar-ask")) {
+        let askBtn = parseElement('<button id="findbar-ask" class="zenux-btn-primary" anonid="findbar-ask">Ask</button>');
+        askBtn.addEventListener("click", () => {
+          let inpText = this.findbar._findField.value.trim();
+          this.sendMessage(inpText), this.findbar._findField.value = "", this.focusInput();
+        }), container.appendChild(askBtn), this.askButton = askBtn;
+      }
+    } else {
+      let button = parseElement('<button id="findbar-expand" class="zenux-btn-primary" anonid="findbar-expand">Expand</button>');
+      button.addEventListener("click", () => this.expanded = !0), button.textContent = "Expand", this.findbar.appendChild(button), this.expandButton = button;
+    }
+    return !0;
+  },
+  removeExpandButton() {
+    if (this.askButton)
+      this.askButton.remove(), this.askButton = null;
+    if (this.expandButton)
+      this.expandButton.remove(), this.expandButton = null;
+    return !0;
+  },
+  handleInputKeyPress: function(e) {
+    if (e?.key === "Enter" && e?.altKey) {
+      e.preventDefault();
+      let inpText = this.findbar._findField.value.trim();
+      this.sendMessage(inpText), this.findbar._findField.value = "", this.focusInput();
+    }
+  },
+  _ensureContextMenuListener(contextMenu) {
+    if (!contextMenu)
+      return;
+    if (!this._updateContextMenuText)
+      this._updateContextMenuText = this.updateContextMenuText.bind(this);
+    contextMenu.removeEventListener("popupshowing", this._updateContextMenuText), contextMenu.addEventListener("popupshowing", this._updateContextMenuText);
+  },
+  addContextMenuItem(retryCount = 0) {
+    if (this._contextMenuRetryTimer)
+      clearTimeout(this._contextMenuRetryTimer), this._contextMenuRetryTimer = null;
+    if (!PREFS2.contextMenuEnabled)
+      return;
+    let contextMenu = document.getElementById("contentAreaContextMenu");
+    if (!contextMenu) {
+      if (retryCount < 5)
+        PREFS2.debugLog(`Context menu not found, retrying... (attempt ${retryCount + 1}/5)`), this._contextMenuRetryTimer = setTimeout(() => {
+          this._contextMenuRetryTimer = null, this.addContextMenuItem(retryCount + 1);
+        }, 200);
+      else
+        PREFS2.debugError("Failed to add context menu item after 5 attempts: Context menu not found.");
+      return;
+    }
+    if (!this._handleContextMenuClick)
+      this._handleContextMenuClick = this.handleContextMenuClick.bind(this);
+    let existingItems = contextMenu.querySelectorAll("#browse-bot-context-menu-item");
+    if (existingItems.length > 0) {
+      this.contextMenuItem = existingItems[0];
+      for (let i = 1;i < existingItems.length; i++)
+        existingItems[i].remove();
+      this.contextMenuItem.removeEventListener("command", this._handleContextMenuClick), this.contextMenuItem.addEventListener("command", this._handleContextMenuClick), this._ensureContextMenuListener(contextMenu);
+      return;
+    }
+    let menuItem = parseElement(`<menuitem 
+      label="Ask AI"
+      accesskey="A" 
+      id = "browse-bot-context-menu-item">
+      </menuitem>`, "xul");
+    menuItem.addEventListener("command", this._handleContextMenuClick), this.contextMenuItem = menuItem;
+    let searchSelectItem = contextMenu.querySelector("#context-searchselect");
+    if (searchSelectItem)
+      if (searchSelectItem.nextSibling)
+        contextMenu.insertBefore(menuItem, searchSelectItem.nextSibling);
+      else
+        contextMenu.appendChild(menuItem);
+    else {
+      let redoSeparator = contextMenu.querySelector("#context-sep-redo");
+      if (redoSeparator)
+        if (redoSeparator.nextSibling)
+          contextMenu.insertBefore(menuItem, redoSeparator.nextSibling);
+        else
+          contextMenu.appendChild(menuItem);
+      else
+        return;
+    }
+    this._ensureContextMenuListener(contextMenu);
+  },
+  removeContextMenuItem: function() {
+    if (this._contextMenuRetryTimer)
+      clearTimeout(this._contextMenuRetryTimer), this._contextMenuRetryTimer = null;
+    let contextMenu = document.getElementById("contentAreaContextMenu");
+    if (contextMenu && this._updateContextMenuText)
+      contextMenu.removeEventListener("popupshowing", this._updateContextMenuText);
+    if (this._handleContextMenuClick && this.contextMenuItem)
+      this.contextMenuItem.removeEventListener("command", this._handleContextMenuClick);
+    document.querySelectorAll("#browse-bot-context-menu-item").forEach((item) => item.remove()), this.contextMenuItem = null;
+  },
+  handleContextMenuClick: async function() {
+    let selection = await messageManagerAPI.getSelectedText(), finalMessage;
+    if (selection.hasSelection)
+      finalMessage = PREFS2.contextMenuCommandWithSelection.replace("{selection}", selection.selectedText);
+    else
+      finalMessage = PREFS2.contextMenuCommandNoSelection;
+    if (this.expanded = !0, PREFS2.contextMenuAutoSend)
+      this.sendMessage(finalMessage), this.focusPrompt();
+    else
+      this.setPromptText(finalMessage), this.show(), this.focusPrompt();
+  },
+  handleContextMenuPrefChange: function(pref) {
+    if (pref.value)
+      this.addContextMenuItem();
+    else
+      this.removeContextMenuItem();
+  },
+  updateContextMenuText() {
+    if (!PREFS2.contextMenuEnabled)
+      return;
+    let items = document.querySelectorAll("#browse-bot-context-menu-item");
+    if (items.length > 1) {
+      for (let i = 1;i < items.length; i++)
+        items[i].remove();
+      this.contextMenuItem = items[0];
+    } else if (items.length === 1)
+      this.contextMenuItem = items[0];
+    if (!this.contextMenuItem)
+      return;
+    let hasSelection = gContextMenu?.isTextSelected === !0;
+    this.contextMenuItem.label = hasSelection ? "Ask AI" : "Summarize with AI";
+  },
+  enableResize() {
+    if (!this.findbar || this._resizeHandle)
+      return;
+    let resizeHandle = parseElement('<div class="findbar-resize-handle"></div>');
+    this.findbar.appendChild(resizeHandle), this._resizeHandle = resizeHandle, this._startResize = this.startResize.bind(this), this._resizeHandle.addEventListener("mousedown", this._startResize);
+  },
+  startResize(e) {
+    if (e.button !== 0 || !this.findbar)
+      return;
+    this._isResizing = !0, this._initialMouseCoor = { x: e.clientX, y: e.clientY };
+    let rect = this.findbar.getBoundingClientRect();
+    this.startWidth = rect.width, this._handleResize = this.doResize.bind(this), this._stopResize = this.stopResize.bind(this), document.addEventListener("mousemove", this._handleResize), document.addEventListener("mouseup", this._stopResize);
+  },
+  doResize(e) {
+    if (!this._isResizing || !this.findbar)
+      return;
+    let minWidth = 300, maxWidth = 800, directionFactor = PREFS2.position.includes("right") ? -1 : 1, newWidth = this.startWidth + (e.clientX - this._initialMouseCoor.x) * directionFactor;
+    newWidth = Math.min(Math.max(newWidth, minWidth), maxWidth), this.findbar.style.width = `${newWidth}px`, this._updateFindbarDimensions();
+  },
+  stopResize() {
+    this._isResizing = !1, document.removeEventListener("mousemove", this._handleResize), document.removeEventListener("mouseup", this._stopResize), this._handleResize = null, this._stopResize = null, this._updateFindbarDimensions(), this._saveFindbarDimensions();
+  },
+  disableResize() {
+    this._resizeHandle?.remove(), this._resizeHandle = null, this.stopResize();
+  },
+  startDrag(e) {
+    if (!this.chatContainer || e.button !== 0)
+      return;
+    this._isDragging = !0, this._initialMouseCoor = { x: e.clientX, y: e.clientY };
+    let rect = this.findbar.getBoundingClientRect();
+    this._initialContainerCoor = { x: rect.left, y: rect.top }, this._handleDrag = this.doDrag.bind(this), this._stopDrag = this.stopDrag.bind(this), document.addEventListener("mousemove", this._handleDrag), document.addEventListener("mouseup", this._stopDrag);
+  },
+  doDrag(e) {
+    if (!this._isDragging)
+      return;
+    let minCoors = { x: 15, y: 35 }, rect = this.findbar.getBoundingClientRect(), maxCoors = {
+      x: window.innerWidth - rect.width - 33,
+      y: window.innerHeight - rect.height - 33
+    }, newCoors = {
+      x: this._initialContainerCoor.x + (e.clientX - this._initialMouseCoor.x),
+      y: this._initialContainerCoor.y + (e.clientY - this._initialMouseCoor.y)
+    };
+    if (newCoors.x -= getSidebarWidth(), newCoors.x = Math.max(minCoors.x, Math.min(newCoors.x, maxCoors.x)), newCoors.y = Math.max(minCoors.y, Math.min(newCoors.y, maxCoors.y)), PREFS2.pseudoBg)
+      this._updateFindbarDimensions();
+    this.findbar.style.setProperty("left", `${newCoors.x}px`, "important"), this.findbar.style.setProperty("top", `${newCoors.y}px`, "important"), this.findbar.style.setProperty("right", "unset", "important"), this.findbar.style.setProperty("bottom", "unset", "important");
+  },
+  stopDrag() {
+    if (this._isDragging = !1, !PREFS2.pseudoBg)
+      this.findbar.style.setProperty("transition", "all 0.3s ease", "important"), setTimeout(() => this.findbar.style.removeProperty("transition"), 400), setTimeout(() => this._updateFindbarDimensions(), 401);
+    this.snapToClosestCorner(), this._initialMouseCoor = { x: null, y: null }, this._initialContainerCoor = { x: null, y: null }, document.removeEventListener("mouseup", this._stopDrag), document.removeEventListener("mousemove", this._handleDrag), this._handleDrag = null, this._stopDrag = null, setTimeout(() => this._updateFindbarDimensions(), 0);
+  },
+  snapToClosestCorner() {
+    if (!this.findbar || !PREFS2.dndEnabled)
+      return;
+    let rect = this.findbar.getBoundingClientRect(), { left: currentX, top: currentY, width: findbarWidth, height: findbarHeight } = rect, snapPoints = {
+      "top-left": { x: 0, y: 0 },
+      "top-right": { x: window.innerWidth - findbarWidth, y: 0 },
+      "bottom-left": { x: 0, y: window.innerHeight - findbarHeight },
+      "bottom-right": {
+        x: window.innerWidth - findbarWidth,
+        y: window.innerHeight - findbarHeight
+      }
+    }, closestPointName = PREFS2.position, minDistance = 1 / 0;
+    for (let name in snapPoints) {
+      let p = snapPoints[name], distance = Math.sqrt(Math.pow(currentX - p.x, 2) + Math.pow(currentY - p.y, 2));
+      if (distance < minDistance)
+        minDistance = distance, closestPointName = name;
+    }
+    if (closestPointName !== PREFS2.position)
+      PREFS2.position = closestPointName;
+    this.findbar.style.removeProperty("left"), this.findbar.style.removeProperty("top"), this.findbar.style.removeProperty("bottom"), this.findbar.style.removeProperty("right");
+  },
+  enableDND() {
+    if (!this.chatContainer)
+      return;
+    let handle = this.chatContainer.querySelector(".findbar-drag-handle");
+    if (!handle)
+      return;
+    this._startDrag = this.startDrag.bind(this), handle.addEventListener("mousedown", this._startDrag);
+  },
+  disableDND() {
+    if (this._isDragging = !1, !this.chatContainer)
+      return;
+    let handle = this.chatContainer.querySelector(".findbar-drag-handle");
+    if (!handle)
+      return;
+    handle.removeEventListener("mousedown", this._startDrag), document.removeEventListener("mouseup", this._stopDrag), document.removeEventListener("mousemove", this._handleDrag), this._startDrag = null, this._stopDrag = null;
+  },
+  addKeymaps: function(e) {
+    if (e.key?.toLowerCase() === "escape") {
+      if (SettingsModal._modalElement && SettingsModal._modalElement.parentNode)
+        e.preventDefault(), e.stopPropagation(), SettingsModal.hide();
+      else if (this.expanded)
+        e.preventDefault(), e.stopPropagation(), this.expanded = !1, this.focusInput();
+    }
+  },
+  addListeners() {
+    this._updateFindbar = this.updateFindbar.bind(this), this._addKeymaps = this.addKeymaps.bind(this), this._handleInputKeyPress = this.handleInputKeyPress.bind(this);
+    let _clearLLMData = () => {
+      this.updateFindbarStatus(), this.clear();
+    }, _handleContextMenuPrefChange = this.handleContextMenuPrefChange.bind(this), _handleMinimalPrefChange = this.handleMinimalPrefChange.bind(this), _handleBackgroundStyleChange = () => {
+      updateSidebarWidth();
+    };
+    gBrowser.tabContainer.addEventListener("TabSelect", this._updateFindbar), document.addEventListener("keydown", this._addKeymaps), this._handleFindbarOpenEvent = this.handleFindbarOpenEvent.bind(this), this._handleFindbarCloseEvent = this.handleFindbarCloseEvent.bind(this), window.addEventListener("findbaropen", this._handleFindbarOpenEvent), window.addEventListener("findbarclose", this._handleFindbarCloseEvent), this._backgroundStylesListener = addPrefListener(PREFS2.BACKGROUND_STYLE, _handleBackgroundStyleChange), this._citationsListener = addPrefListener(PREFS2.CITATIONS_ENABLED, _clearLLMData), this._minimalListener = addPrefListener(PREFS2.MINIMAL, _handleMinimalPrefChange), this._contextMenuEnabledListener = addPrefListener(PREFS2.CONTEXT_MENU_ENABLED, _handleContextMenuPrefChange), this._persistListener = addPrefListener(PREFS2.PERSIST, (pref) => {
+      if (!this.findbar)
+        return;
+      if (pref.value)
+        this.findbar.history = browseBotFindbarLLM.history;
+      else
+        this.findbar.history = null;
+    }), this._dndListener = addPrefListener(PREFS2.DND_ENABLED, (pref) => {
+      if (pref.value)
+        this.enableDND(), this.enableResize();
+      else
+        this.disableDND(), this.disableResize();
+    });
+  },
+  removeListeners() {
+    if (this.findbar)
+      this.findbar._findField.removeEventListener("keypress", this._handleInputKeyPress), this.findbar._findField.removeEventListener("input", this._handleFindFieldInput);
+    gBrowser.tabContainer.removeEventListener("TabSelect", this._updateFindbar), document.removeEventListener("keydown", this._addKeymaps), window.removeEventListener("findbaropen", this._handleFindbarOpenEvent), window.removeEventListener("findbarclose", this._handleFindbarCloseEvent), removePrefListener(this._backgroundStylesListener), removePrefListener(this._citationsListener), removePrefListener(this._contextMenuEnabledListener), removePrefListener(this._minimalListener), removePrefListener(this._persistListener), removePrefListener(this._dndListener), this.disableDND(), this._handleInputKeyPress = null, this._updateFindbar = null, this._addKeymaps = null, this._citationsListener = null, this._contextMenuEnabledListener = null, this._minimalListener = null, this._dndListener = null, this._handleFindbarOpenEvent = null, this._handleFindbarCloseEvent = null;
+  },
+  handleFindbarOpenEvent: function() {
+    if (this.enabled)
+      PREFS2.debugLog("Findbar is being opened"), setTimeout(() => this.findbar._findField.placeholder = "Press Alt + Enter to ask AI", 100), setTimeout(() => this._updateFindbarDimensions(), 1), setTimeout(() => {
+        if (this.expanded)
+          this.focusPrompt();
+        else
+          this.focusInput();
+      }, 2);
+  },
+  handleFindbarCloseEvent: function() {
+    if (this.enabled) {
+      if (PREFS2.debugLog("Findbar is being closed"), this._isStreaming)
+        this._abortController?.abort();
+    }
+  }
+};
+
+// findbar-ai/llm/providers.js
+init_prefs();
+
+// utils/favicon.js
+function googleFaviconAPI(domainOrUrl, size = 32) {
+  let domain;
+  try {
+    domain = new URL(domainOrUrl).hostname;
+  } catch {
+    domain = domainOrUrl;
+  }
+  return `https://s2.googleusercontent.com/s2/favicons?domain_url=https://${domain}&sz=${size}`;
+}
+
+// findbar-ai/llm/providers.js
+var providerPrototype = {
+  get apiKey() {
+    return getCachedApiKey(this.apiPref);
+  },
+  set apiKey(v) {
+    if (typeof v === "string" && this.apiPref)
+      setSecureApiKey(this.apiPref, v);
+  },
+  getApiKeyAsync() {
+    return getSecureApiKey(this.apiPref);
+  },
+  setApiKeyAsync(v) {
+    return setSecureApiKey(this.apiPref, v);
+  },
+  get model() {
+    return prefs_default.getPref(this.modelPref);
+  },
+  set model(v) {
+    if (!this.AVAILABLE_MODELS) {
+      if (typeof v === "string" && this.modelPref)
+        prefs_default.setPref(this.modelPref, v);
+    } else if (this.AVAILABLE_MODELS.includes(v))
+      prefs_default.setPref(this.modelPref, v);
+  },
+  getModel() {
+    return {
+      kind: this.kind || "openai",
+      baseURL: this.baseURL,
+      apiKey: this.apiKey,
+      model: this.model,
+      ...this.extraHeaders ? { extraHeaders: this.extraHeaders } : {}
+    };
+  },
+  async getModelAsync() {
+    return {
+      kind: this.kind || "openai",
+      baseURL: this.baseURL,
+      apiKey: await this.getApiKeyAsync(),
+      model: this.model,
+      ...this.extraHeaders ? { extraHeaders: this.extraHeaders } : {}
+    };
+  },
+  getModelLabel(model) {
+    return this.AVAILABLE_MODELS_LABELS?.[model] ?? formatModelLabel(model);
+  }
+};
+function formatModelLabel(modelId) {
+  let tokens = String(modelId || "").split("-"), suffixTerms = {
+    latest: "Latest",
+    experimental: "Experimental",
+    exp: "Experimental",
+    reasoning: "Reasoning"
+  }, suffix = "";
+  if (tokens.length > 2 && tokens[tokens.length - 2] === "non" && tokens[tokens.length - 1] === "reasoning")
+    tokens.splice(-2), suffix = " (Non-Reasoning)";
+  else if (tokens.length > 1 && suffixTerms[tokens[tokens.length - 1].toLowerCase()])
+    suffix = ` (${suffixTerms[tokens.pop().toLowerCase()]})`;
+  let words = [];
+  for (let token of tokens) {
+    let prev = words[words.length - 1];
+    if (prev && /^\d+$/.test(prev.raw) && /^\d+$/.test(token)) {
+      prev.raw += `.${token}`, prev.text = prev.raw;
+      continue;
+    }
+    let lower = token.toLowerCase(), text;
+    if (lower === "gpt")
+      text = "GPT";
+    else if (lower === "oss")
+      text = "OSS";
+    else if (lower === "deepseek")
+      text = "DeepSeek";
+    else if (/^\d+b$/i.test(token))
+      text = token.toUpperCase();
+    else
+      text = token.charAt(0).toUpperCase() + token.slice(1);
+    words.push({ raw: token, text });
+  }
+  return words.map((word) => word.text).join(" ") + suffix;
+}
+function chatUrl(base) {
+  let clean = String(base || "").replace(/\/+$/, "");
+  return clean.endsWith("/chat/completions") ? clean : `${clean}/chat/completions`;
+}
+async function fetchJson(url) {
+  let res = await fetch(url);
+  if (!res.ok)
+    throw Error(`HTTP ${res.status}`);
+  return res.json();
+}
+var mistral = Object.assign(Object.create(providerPrototype), {
+  name: "mistral",
+  label: "Mistral AI",
+  faviconUrl: googleFaviconAPI("mistral.ai"),
+  apiKeyUrl: "https://console.mistral.ai/api-keys/",
+  AVAILABLE_MODELS: [
+    "mistral-large-latest",
+    "mistral-medium-latest",
+    "mistral-medium-3.5",
+    "mistral-small-latest",
+    "codestral-latest",
+    "ministral-8b-latest",
+    "ministral-3b-latest"
+  ],
+  modelPref: prefs_default.MISTRAL_MODEL,
+  apiPref: prefs_default.MISTRAL_API_KEY,
+  baseURL: "https://api.mistral.ai/v1/chat/completions"
+}), gemini = Object.assign(Object.create(providerPrototype), {
+  name: "gemini",
+  label: "Google Gemini",
+  faviconUrl: googleFaviconAPI("gemini.google.com"),
+  apiKeyUrl: "https://aistudio.google.com/app/apikey",
+  kind: "gemini",
+  AVAILABLE_MODELS: [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-pro-preview",
+    "gemini-3-flash-preview"
+  ],
+  modelPref: prefs_default.GEMINI_MODEL,
+  apiPref: prefs_default.GEMINI_API_KEY,
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+}), openai = Object.assign(Object.create(providerPrototype), {
+  name: "openai",
+  label: "OpenAI GPT",
+  faviconUrl: googleFaviconAPI("chatgpt.com"),
+  apiKeyUrl: "https://platform.openai.com/account/api-keys",
+  AVAILABLE_MODELS: [
+    "gpt-6-astra",
+    "gpt-6.1-sol",
+    "gpt-6-sol",
+    "gpt-6-luna",
+    "gpt-5.6",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.2",
+    "gpt-5.1",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4o",
+    "gpt-4o-mini"
+  ],
+  modelPref: prefs_default.OPENAI_MODEL,
+  apiPref: prefs_default.OPENAI_API_KEY,
+  baseURL: "https://api.openai.com/v1/chat/completions"
+}), claude = Object.assign(Object.create(providerPrototype), {
+  name: "claude",
+  label: "Anthropic Claude",
+  faviconUrl: googleFaviconAPI("claude.ai"),
+  apiKeyUrl: "https://console.anthropic.com/dashboard",
+  kind: "anthropic",
+  AVAILABLE_MODELS: [
+    "claude-fable-5-1",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-opus-5",
+    "claude-sonnet-5",
+    "claude-haiku-4-5",
+    "claude-fable-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-opus-4-6",
+    "claude-sonnet-4-6",
+    "claude-opus-4-5",
+    "claude-sonnet-4-5"
+  ],
+  modelPref: prefs_default.CLAUDE_MODEL,
+  apiPref: prefs_default.CLAUDE_API_KEY,
+  get baseURL() {
+    return "";
+  }
+}), grok = Object.assign(Object.create(providerPrototype), {
+  name: "grok",
+  label: "xAI Grok",
+  faviconUrl: googleFaviconAPI("grok.com"),
+  apiKeyUrl: "https://x.ai/api",
+  AVAILABLE_MODELS: [
+    "grok-4.7",
+    "grok-4.6",
+    "grok-4.5",
+    "grok-4.3",
+    "grok-code-fast-1",
+    "grok-4.20-0309-reasoning",
+    "grok-4.20-0309-non-reasoning"
+  ],
+  AVAILABLE_MODELS_LABELS: {
+    "grok-4.20-0309-reasoning": "Grok 4.20 (Reasoning)",
+    "grok-4.20-0309-non-reasoning": "Grok 4.20 (Non-Reasoning)"
+  },
+  modelPref: prefs_default.GROK_MODEL,
+  apiPref: prefs_default.GROK_API_KEY,
+  baseURL: "https://api.x.ai/v1/chat/completions"
+}), perplexity = Object.assign(Object.create(providerPrototype), {
+  name: "perplexity",
+  label: "Perplexity AI",
+  faviconUrl: googleFaviconAPI("perplexity.ai"),
+  apiKeyUrl: "https://perplexity.ai",
+  AVAILABLE_MODELS: ["sonar"],
+  modelPref: prefs_default.PERPLEXITY_MODEL,
+  apiPref: prefs_default.PERPLEXITY_API_KEY,
+  baseURL: "https://api.perplexity.ai/chat/completions"
+}), cerebras = Object.assign(Object.create(providerPrototype), {
+  name: "cerebras",
+  label: "Cerebras AI",
+  faviconUrl: "https://www.google.com/s2/favicons?sz=32&domain_url=cerebras.ai",
+  apiKeyUrl: "https://cerebras.ai",
+  AVAILABLE_MODELS: ["gpt-oss-120b", "qwen-3.8-27b"],
+  modelPref: prefs_default.CEREBRAS_MODEL,
+  apiPref: prefs_default.CEREBRAS_API_KEY,
+  baseURL: "https://api.cerebras.ai/v1/chat/completions"
+}), deepseek = Object.assign(Object.create(providerPrototype), {
+  name: "deepseek",
+  label: "DeepSeek",
+  faviconUrl: googleFaviconAPI("deepseek.com"),
+  apiKeyUrl: "https://platform.deepseek.com/api_keys",
+  AVAILABLE_MODELS: [
+    "deepseek-flash",
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash-vision-exp"
+  ],
+  modelPref: prefs_default.DEEPSEEK_MODEL,
+  apiPref: prefs_default.DEEPSEEK_API_KEY,
+  baseURL: "https://api.deepseek.com/chat/completions"
+}), openrouter = Object.create(providerPrototype, Object.getOwnPropertyDescriptors({
+  name: "openrouter",
+  label: "OpenRouter",
+  faviconUrl: googleFaviconAPI("openrouter.ai"),
+  apiKeyUrl: "https://openrouter.ai/keys",
+  customModel: !0,
+  modelPlaceholder: "e.g. anthropic/claude-opus-4-8",
+  get model() {
+    return prefs_default.getPref(this.modelPref) || "";
+  },
+  set model(v) {
+    if (typeof v === "string")
+      prefs_default.setPref(this.modelPref, v);
+  },
+  isFreeModel(id) {
+    return String(id || "").endsWith(":free");
+  },
+  async checkKey(apiKey) {
+    if (!apiKey)
+      return { valid: !1 };
+    let headers = { Authorization: `Bearer ${apiKey}` }, keyRes = await fetch("https://openrouter.ai/api/v1/auth/key", { headers });
+    if (keyRes.status === 401 || keyRes.status === 403)
+      return { valid: !1 };
+    if (!keyRes.ok)
+      throw Error(`HTTP ${keyRes.status}`);
+    let keyJson = await keyRes.json().catch(() => ({})), creditRes = await fetch("https://openrouter.ai/api/v1/credits", { headers });
+    if (!creditRes.ok)
+      throw Error(`HTTP ${creditRes.status}`);
+    let data = (await creditRes.json().catch(() => ({})))?.data || {}, remaining = (data.total_credits ?? data.limit ?? 0) - (data.total_usage ?? data.usage ?? 0);
+    return {
+      valid: !0,
+      freeTier: keyJson?.data?.is_free_tier !== !1,
+      paidAccess: remaining > 0
+    };
+  },
+  async refreshModels() {
+    let json = await fetchJson("https://openrouter.ai/api/v1/models"), ids = [...new Set((json?.data || []).map((m) => m?.id).filter(Boolean))];
+    return ids.sort((a, b) => Number(this.isFreeModel(b)) - Number(this.isFreeModel(a)) || a.localeCompare(b)), ids;
+  },
+  modelPref: prefs_default.OPENROUTER_MODEL,
+  apiPref: prefs_default.OPENROUTER_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1/chat/completions",
+  extraHeaders: {
+    "HTTP-Referer": "https://github.com/BibekBhusal0/zen-custom-js",
+    "X-Title": "BrowseBot"
+  }
+})), pollinations = Object.assign(Object.create(providerPrototype), {
+  name: "pollinations",
+  label: "Pollinations AI",
+  faviconUrl: googleFaviconAPI("pollinations.ai"),
+  apiKeyUrl: "https://enter.pollinations.ai/keys",
+  noApiKey: !0,
+  customModel: !0,
+  modelPlaceholder: "e.g. openai-fast",
+  get model() {
+    return prefs_default.getPref(this.modelPref) || "";
+  },
+  set model(v) {
+    if (typeof v === "string")
+      prefs_default.setPref(this.modelPref, v);
+  },
+  isFreeModel() {
+    return !0;
+  },
+  isBalanceExhaustedText(text) {
+    let t = String(text || "");
+    if (!t)
+      return !1;
+    if (/doesn'?t have enough credits|budget exhausted|insufficient balance/i.test(t))
+      return !0;
+    return /top[- ]?up/i.test(t) && /quest|pollen|pollinations|enter\.pollinations\.ai/i.test(t);
+  },
+  async refreshModels() {
+    if (this.apiKey)
+      try {
+        let res = await fetch("https://gen.pollinations.ai/v1/models", {
+          headers: { Authorization: `Bearer ${this.apiKey}` }
+        });
+        if (!res.ok)
+          throw Error(`HTTP ${res.status}`);
+        let json = await res.json(), ids = [...new Set((json?.data || []).map((m) => m?.id).filter(Boolean))];
+        if (ids.length)
+          return ids;
+      } catch (e) {
+        prefs_default.debugError?.("Keyed Pollinations model list failed, falling back:", e);
+      }
+    let json = await fetchJson("https://text.pollinations.ai/models"), ids = [];
+    for (let m of Array.isArray(json) ? json : []) {
+      if (m?.name)
+        ids.push(m.name);
+      for (let alias of m?.aliases || [])
+        ids.push(alias);
+    }
+    return [...new Set(ids)];
+  },
+  modelPref: prefs_default.POLLINATIONS_MODEL,
+  apiPref: prefs_default.POLLINATIONS_API_KEY,
+  get baseURL() {
+    return this.apiKey ? "https://gen.pollinations.ai/v1/chat/completions" : "https://text.pollinations.ai/openai";
+  }
+}), ollama = Object.assign(Object.create(providerPrototype), {
+  name: "ollama",
+  label: "Ollama (local)",
+  faviconUrl: googleFaviconAPI("ollama.com"),
+  apiKeyUrl: "",
+  noApiKey: !0,
+  customModel: !0,
+  modelPlaceholder: "e.g. qwen3:8b",
+  baseUrlPref: prefs_default.OLLAMA_BASE_URL,
+  get baseUrl() {
+    return prefs_default.ollamaBaseUrl;
+  },
+  set baseUrl(v) {
+    if (typeof v === "string")
+      prefs_default.ollamaBaseUrl = v;
+  },
+  get baseURL() {
+    return chatUrl(this.baseUrl.replace(/\/api$/, "/v1"));
+  },
+  modelPref: prefs_default.OLLAMA_MODEL,
+  get apiKey() {
+    return "not_required";
+  },
+  set apiKey(v) {
+    return;
+  },
+  getApiKeyAsync() {
+    return Promise.resolve("not_required");
+  }
+}), custom = Object.create(providerPrototype, Object.getOwnPropertyDescriptors({
+  name: "custom",
+  label: "Custom Provider",
+  faviconUrl: "chrome://global/skin/icons/settings.svg",
+  apiKeyUrl: "",
+  customModel: !0,
+  modelPlaceholder: "e.g. deepseek-chat",
+  modelPref: prefs_default.CUSTOM_MODEL,
+  apiPref: prefs_default.CUSTOM_API_KEY,
+  get model() {
+    return prefs_default.getPref(this.modelPref) || "";
+  },
+  set model(v) {
+    if (typeof v === "string")
+      prefs_default.setPref(this.modelPref, v);
+  },
+  get baseURL() {
+    return chatUrl(prefs_default.getPref(prefs_default.CUSTOM_BASE_URL) || "");
+  }
+}));
+
+// findbar-ai/llm/index.js
+init_messageManager();
+init_prefs();
+
+class LLM {
+  constructor() {
+    this.history = [], this.AVAILABLE_PROVIDERS = {
+      pollinations,
+      claude,
+      gemini,
+      grok,
+      mistral,
+      ollama,
+      openai,
+      perplexity,
+      cerebras,
+      deepseek,
+      openrouter,
+      custom
+    };
+  }
+  get llmProvider() {
+    return prefs_default.llmProvider;
+  }
+  get currentProvider() {
+    return this.AVAILABLE_PROVIDERS[this.llmProvider || "pollinations"] || this.AVAILABLE_PROVIDERS.pollinations;
+  }
+  setProvider(providerName) {
+    if (this.AVAILABLE_PROVIDERS[providerName])
+      prefs_default.llmProvider = providerName, prefs_default.debugLog(`Switched LLM provider to: ${providerName}`);
+    else
+      prefs_default.debugError(`Provider "${providerName}" not found.`);
+  }
+  async getSystemPrompt() {
+    return "";
+  }
+  getSampling() {
+    return {
+      temperature: prefs_default.llmTemperature,
+      topP: prefs_default.llmTopP,
+      topK: prefs_default.llmTopK,
+      frequencyPenalty: prefs_default.llmFrequencyPenalty,
+      presencePenalty: prefs_default.llmPresencePenalty,
+      maxTokens: prefs_default.llmMaxOutputTokens
+    };
+  }
+  async generateText(options) {
+    let { prompt, tools, maxSteps, messages, abortSignal } = options;
+    if (prompt)
+      this.history.push({ role: "user", content: prompt });
+    let result = await generateText({
+      provider: await this.currentProvider.getModelAsync(),
+      system: await this.getSystemPrompt(),
+      messages: messages || this.history,
+      tools,
+      maxSteps: maxSteps || 1,
+      sampling: this.getSampling(),
+      abortSignal
+    });
+    if (!messages)
+      this.history.push(...result.response.messages);
+    return result;
+  }
+  async streamText(options) {
+    let { prompt, onFinish, tools, maxSteps, messages, abortSignal } = options;
+    if (prompt)
+      this.history.push({ role: "user", content: prompt });
+    let self = this;
+    return streamText({
+      provider: await this.currentProvider.getModelAsync(),
+      system: await this.getSystemPrompt(),
+      messages: messages || this.history,
+      tools,
+      maxSteps: maxSteps || 1,
+      sampling: this.getSampling(),
+      abortSignal,
+      async onFinish(result) {
+        if (!messages)
+          self.history.push(...result.response.messages);
+        if (onFinish)
+          onFinish(result);
+      }
+    });
+  }
+  async generateTextWithCitations(options) {
+    let { prompt, messages, abortSignal } = options;
+    if (prompt)
+      this.history.push({ role: "user", content: prompt });
+    let result = await generateText({
+      provider: await this.currentProvider.getModelAsync(),
+      system: await this.getSystemPrompt(),
+      messages: messages || this.history,
+      sampling: this.getSampling(),
+      jsonMode: !0,
+      abortSignal
+    }), output;
+    try {
+      output = JSON.parse(result.text);
+    } catch {
+      output = { answer: result.text, citations: [] };
+    }
+    if (!messages)
+      this.history.push({ role: "assistant", content: result.text });
+    return output;
+  }
+  getHistory() {
+    return [...this.history];
+  }
+  setHistory(messages) {
+    if (!Array.isArray(messages))
+      return;
+    this.history = messages.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content !== void 0 && m.content !== null);
+  }
+  clearData() {
+    prefs_default.debugLog("Clearing LLM history and system prompt."), this.history = [];
+  }
+  getLastMessage() {
+    return this.history.length > 0 ? this.history[this.history.length - 1] : null;
+  }
+}
+var pageCitationExamples = `### Citation Examples
+
+Here are some examples demonstrating the correct JSON output format.
+
+**Example 1: General Question with a List and Multiple Citations**
+-   **User Prompt:** "What are the main benefits of using this library?"
+-   **Your JSON Response:**
+    \`\`\`json
+    {
+      "answer": "This library offers several key benefits:
+
+*   **High Performance**: It is designed to be fast and efficient for large-scale data processing [1].
+*   **Flexibility**: You can integrate it with various frontend frameworks [2].
+*   **Ease of Use**: The API is well-documented and simple to get started with [3].",
+      "citations": [
+        {
+          "id": 1,
+          "source_quote": "The new architecture provides significant performance gains, especially for large-scale data processing."
+        },
+        {
+          "id": 2,
+          "source_quote": "It is framework-agnostic, offering adapters for React, Vue, and Svelte."
+        },
+        {
+          "id": 3,
+          "source_quote": "Our extensive documentation and simple API make getting started a breeze."
+        }
+      ]
+    }
+    \`\`\`
+
+**Example 2: A Sentence Supported by Two Different Sources**
+-   **User Prompt:** "Tell me about the project's history."
+-   **Your JSON Response:**
+    \`\`\`json
+    {
+      "answer": "The project was initially created in 2021 [1] and later became open-source in 2022 [2].",
+      "citations": [
+        {
+          "id": 1,
+          "source_quote": "Development began on the initial prototype in early 2021."
+        },
+        {
+          "id": 2,
+          "source_quote": "We are proud to announce that as of September 2022, the project is fully open-source."
+        }
+      ]
+    }
+    \`\`\`
+`, videoCitationExample = `### Citation Example
+
+The provided content is a timestamped video transcript. Cite with the segment's time.
+
+-   **User Prompt:** "When does the speaker mention the launch date?"
+-   **Your JSON Response:**
+    \`\`\`json
+    {
+      "answer": "The speaker announces the launch for March [1].",
+      "citations": [
+        {
+          "id": 1,
+          "source_quote": "we are launching in March",
+          "timestamp": "4:30"
+        }
+      ]
+    }
+    \`\`\`
+`;
+
+class BrowseBotLLM extends LLM {
+  constructor() {
+    super();
+    this.systemInstruction = "", this.pageContextUrl = null, this.pageContextIsVideo = !1;
+  }
+  get streamEnabled() {
+    return prefs_default.streamEnabled;
+  }
+  get citationsEnabled() {
+    return prefs_default.citationsEnabled;
+  }
+  get maxToolCalls() {
+    return prefs_default.maxToolCalls;
+  }
+  async updateSystemPrompt() {
+    prefs_default.debugLog("Updating system prompt..."), this.systemInstruction = await this.getSystemPrompt();
+  }
+  async getSystemPrompt() {
+    let systemPrompt = "";
+    if (prefs_default.findbarSystemPrompt)
+      systemPrompt = prefs_default.findbarSystemPrompt + `
+
+`;
+    if (systemPrompt += `You are a helpful AI assistant integrated into Zen Browser, a minimal and modern fork of Firefox. Your primary purpose is to answer user questions based on the content of the current webpage.
+
+## Your Instructions:
+- Be concise, accurate, and helpful.`, this.citationsEnabled) {
+      let isVideoPage = !1;
+      try {
+        isVideoPage = !!getYouTubeVideoId(messageManagerAPI.getUrlAndTitle().url);
+      } catch {
+        isVideoPage = !1;
+      }
+      systemPrompt += `
+
+## Citation Instructions
+- **Output Format**: Your entire response **MUST** be a single, valid JSON object with two keys: \`"answer"\` and \`"citations"\`.
+- **Answer**: The \`"answer"\` key holds the conversational text. Use Markdown Syntax for formatting like lists, bolding, etc.
+- **Citations**: The \`"citations"\` key holds an array of citation objects.
+- **When to Cite**: For any statement of fact that is directly supported by the provided page content, you **SHOULD** provide a citation. It is not mandatory for every sentence.
+- **How to Cite**: In your \`"answer"\`, append a marker like \`[1]\`, \`[2]\`. Each marker must correspond to a citation object in the array.
+- **CRITICAL RULES FOR CITATIONS**:
+    1.  **source_quote**: This MUST be the **exact, verbatim, and short** text from the page content.
+    2.  **Accuracy**: The \`"source_quote"\` field must be identical to the text on the page, including punctuation and casing.
+    3.  **Multiple Citations**: If multiple sources support one sentence, format them like \`[1][2]\`, not \`[1,2]\`.
+    4.  **Unique IDs**: Each citation object **must** have a unique \`"id"\` that matches its marker in the answer text.
+    5.  **Short**: The source quote must be short no longer than one sentence and should not contain line brakes.
+- **Do Not Cite**: Do not cite your own abilities, general greetings, or information not from the provided text. Make sure the text is from page text content not from page title or URL.
+${isVideoPage ? '- **Video transcripts**: The provided content is a timestamped transcript where each line starts with its `[mm:ss]` time. Each citation object SHOULD also include a `"timestamp"` field with that segment\'s time (e.g. `"4:30"`). Keep writing `[id]` markers in the answer; the interface shows each marker as its timestamp, and clicking it seeks the video to that moment.' : ""}
+- **Tool Calls**: If you call a tool, you **must not** provide citations in the same turn.
+
+${isVideoPage ? videoCitationExample : pageCitationExamples}
+`;
+    }
+    let { url, title } = messageManagerAPI.getUrlAndTitle();
+    return systemPrompt += `
+- Strictly base all your answers on the webpage content provided as a separate message in this conversation.
+- If the user's question cannot be answered from the content, state that the information is not available on the page.
+- Current page: "${title}" (${url})
+- For browser actions like managing tabs, workspaces, bookmarks, or web searches, tell the user to use the BrowseBot Library instead.
+`, systemPrompt;
+  }
+  parseModelResponseText(responseText) {
+    let answer = responseText, citations = [];
+    if (prefs_default.citationsEnabled)
+      try {
+        let jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/), jsonString = jsonMatch ? jsonMatch[1] : responseText, parsedContent = JSON.parse(jsonString);
+        if (typeof parsedContent.answer === "string") {
+          if (answer = parsedContent.answer, Array.isArray(parsedContent.citations))
+            citations = parsedContent.citations;
+        } else
+          prefs_default.debugLog("AI response JSON missing 'answer' field or not a string:", parsedContent);
+      } catch (e) {
+        prefs_default.debugError("Failed to parse AI message content as JSON:", e, "Raw Text:", responseText);
+      }
+    return { answer, citations };
+  }
+  async attachPageContext() {
+    let { url, title } = messageManagerAPI.getUrlAndTitle(), first = this.history[0];
+    if (first?.pageContext && first?.contextUrl === url) {
+      this.pageContextIsVideo = !!first.isVideo;
+      return;
+    }
+    let content2, isVideo = !1, limit = prefs_default.getPref(prefs_default.MAX_CONTEXT_CHARS) || 0;
+    try {
+      let video = await getVideoContext(url, limit);
+      if (video)
+        content2 = `Video transcript for ${url} (${title}). Each line starts with its [mm:ss] timestamp:
+
+${video.text}`, isVideo = !0;
+    } catch (e) {
+      prefs_default.debugLog("Video transcript unavailable, falling back to page text.", e?.message);
+    }
+    if (!isVideo) {
+      let page = await messageManagerAPI.getPageTextContent(!0).catch(() => null), raw = String(page?.textContent || "");
+      content2 = `Webpage content for ${url} (${page?.title || title}):
+
+` + (limit > 0 && raw.length > limit ? raw.slice(0, limit) + `
+
+[Page content truncated.]` : raw);
+    }
+    let contextMsg = {
+      role: "user",
+      content: content2,
+      pageContext: !0,
+      contextUrl: url,
+      ...isVideo ? { isVideo: !0 } : {}
+    };
+    if (first?.pageContext)
+      this.history[0] = contextMsg;
+    else
+      this.history.unshift(contextMsg);
+    this.pageContextUrl = url, this.pageContextIsVideo = isVideo;
+  }
+  async sendMessage(prompt, abortSignal) {
+    if (prefs_default.debugLog("Current history before sending:", this.history), this.citationsEnabled) {
+      await this.attachPageContext();
+      let object = await super.generateTextWithCitations({
+        prompt,
+        abortSignal
+      });
+      if (browseBotFindbar?.findbar)
+        browseBotFindbar.findbar.history = this.getHistory();
+      return object;
+    }
+    if (await this.attachPageContext(), this.streamEnabled) {
+      let self = this, streamResult = await super.streamText({ prompt, abortSignal });
+      return (async () => {
+        try {
+          if (await streamResult.text, browseBotFindbar?.findbar)
+            browseBotFindbar.findbar.history = self.getHistory();
+        } catch (e) {
+          prefs_default.debugLog("Stream history sync skipped:", e?.message || e);
+        }
+      })(), streamResult;
+    } else {
+      let result = await super.generateText({ prompt, abortSignal });
+      if (browseBotFindbar?.findbar)
+        browseBotFindbar.findbar.history = this.getHistory();
+      return result;
+    }
+  }
+  clearData() {
+    super.clearData(), this.systemInstruction = "", this.pageContextUrl = null, this.pageContextIsVideo = !1;
+  }
+}
+var browseBotFindbarLLM = new BrowseBotLLM;
+window.browseBotFindabrLLM = browseBotFindbarLLM;
+
+// findbar-ai/urlbar.uc.js
+init_prefs();
+
+// findbar-ai/llm/schema.js
+function field(schema, description, optional) {
+  let out = { ...schema };
+  if (description)
+    out.description = description;
+  if (optional)
+    out.optional = !0;
+  return out;
+}
+function str(description, optional = !1) {
+  return field({ type: "string" }, description, optional);
+}
+function num(description, optional = !1) {
+  return field({ type: "number" }, description, optional);
+}
+function strArr(description, optional = !1) {
+  return field({ type: "array", items: { type: "string" } }, description, optional);
+}
+function arrOf(items, description, optional = !1) {
+  return field({ type: "array", items }, description, optional);
+}
+function obj(properties) {
+  let required = [], clean = {};
+  for (let key of Object.keys(properties)) {
+    let { ["optional"]: isOptional, ...schema } = properties[key];
+    if (clean[key] = schema, !isOptional)
+      required.push(key);
+  }
+  let out = { type: "object", properties: clean };
+  if (required.length)
+    out.required = required;
+  return out;
+}
+function paramNames(parameters) {
+  return Object.keys(parameters?.properties || {});
+}
+
 // findbar-ai/llm/tools.js
-import { tool } from "./vercel-ai-sdk.uc.mjs";
-import { z } from "./vercel-ai-sdk.uc.mjs";
+init_messageManager();
+init_prefs();
 
 // utils/toast.js
 function debugLog(...args) {}
@@ -1381,19 +5091,796 @@ async function openLink(url, where = "new tab") {
         }
       break;
     }
+    case "vsep":
     case "vsplit":
-    case "hsplit":
-      if (window.gZenViewSplitter) {
-        let sep = destination === "vsplit" ? "vsep" : "hsep", tab1 = gBrowser.selectedTab;
-        await openTrustedLinkIn(url, "tab");
-        let tab2 = gBrowser.selectedTab;
-        return gZenViewSplitter.splitTabs([tab1, tab2], sep, 1), !0;
-      }
-      break;
+    case "hsep":
+    case "hsplit": {
+      let splitter = window.gZenViewSplitter;
+      if (!splitter)
+        break;
+      let sep = destination.startsWith("v") ? "vsep" : "hsep", side = sep === "vsep" ? "right" : "bottom", currentTab = gBrowser.selectedTab, wasInGroup = !!currentTab?.splitView;
+      await openTrustedLinkIn(url, "tab");
+      let newTab = gBrowser.selectedTab;
+      splitter.splitTabs([currentTab, newTab], sep, 1);
+      let group = splitter._data.find((g) => g.tabs.includes(newTab));
+      if (!group || group.gridType === sep)
+        return !0;
+      if (!wasInGroup || group.tabs.length <= 2)
+        return splitter.splitTabs([...group.tabs], sep, group.tabs.indexOf(newTab)), !0;
+      let curNode = splitter.getSplitNodeFromTab(currentTab), newNode = splitter.getSplitNodeFromTab(newTab);
+      if (!curNode?.parent || !newNode?.parent || curNode === newNode)
+        return splitter.splitTabs([...group.tabs], sep, group.tabs.indexOf(newTab)), !0;
+      let oldParent = newNode.parent;
+      oldParent.children.splice(oldParent.children.indexOf(newNode), 1);
+      let restore = (oldParent.children.length + 1) / oldParent.children.length;
+      return oldParent.children.forEach((c) => c.sizeInParent *= restore), splitter.splitIntoNode(curNode, newNode, side, 0.5), splitter.activateSplitView(group, !0), !0;
+    }
     default:
       break;
   }
   return openTrustedLinkIn(url, "tab"), !1;
+}
+
+// findbar-ai/library/build-tools.js
+init_prefs();
+
+// findbar-ai/library/build-preview.js
+init_prefs();
+var STYLE_ID = "browsebot-build-preview", stagedJS = "", cleanups = [];
+function addCleanup(fn) {
+  if (typeof fn === "function")
+    cleanups.push(fn);
+}
+function revertStagedJS() {
+  let ran = 0;
+  for (let fn of cleanups.splice(0))
+    try {
+      fn(), ran++;
+    } catch {}
+  let nodes = 0;
+  try {
+    let tagged = document.querySelectorAll("[data-browsebot-js]");
+    nodes = tagged.length;
+    for (let el of tagged)
+      el.remove();
+  } catch {}
+  return stagedJS = "", { cleanups: ran, nodes };
+}
+function ensureStyleEl() {
+  let el = document.getElementById(STYLE_ID);
+  if (!el)
+    el = document.createElement("style"), el.id = STYLE_ID, el.setAttribute("data-browsebot", "preview"), document.documentElement.appendChild(el);
+  return el;
+}
+function applyPreviewCSS(css) {
+  let safe = String(css || "");
+  return ensureStyleEl().textContent = safe, PREFS2.debugLog(`Build preview: applied ${safe.length} chars of CSS.`), { appliedChars: safe.length };
+}
+function getPreviewCSS() {
+  try {
+    return document.getElementById(STYLE_ID)?.textContent || "";
+  } catch {
+    return "";
+  }
+}
+function clearPreviewCSS() {
+  try {
+    document.getElementById(STYLE_ID)?.remove();
+  } catch {}
+  PREFS2.debugLog("Build preview: cleared CSS.");
+}
+function setStagedJS(code) {
+  stagedJS = String(code || "");
+}
+function getStagedJS() {
+  return stagedJS;
+}
+function clearStagedJS() {
+  stagedJS = "";
+}
+function getPreviewState() {
+  return {
+    cssChars: getPreviewCSS().length,
+    jsChars: getStagedJS().length,
+    hasPreview: !!getPreviewCSS() || !!getStagedJS()
+  };
+}
+
+// findbar-ai/utils/sine-mods.js
+init_prefs();
+var BROWSEBOT_REPO_URL = "https://github.com/Vertex-Mods/Browse-Bot";
+function slugify(name) {
+  return String(name || "browsebot-mod").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "browsebot-mod";
+}
+function browseBotAuthor(modelName) {
+  return modelName ? `BrowseBot/${modelName}` : "BrowseBot";
+}
+function isBrowseBotAuthor(author) {
+  return String(author || "").toLowerCase().includes("browsebot");
+}
+var UNSAFE_JS_PREF = "sine.allow-unsafe-js";
+function isUnsafeJSAllowed() {
+  try {
+    return Services.prefs.getBoolPref(UNSAFE_JS_PREF, !1);
+  } catch {
+    return !1;
+  }
+}
+function setUnsafeJSAllowed() {
+  Services.prefs.setBoolPref(UNSAFE_JS_PREF, !0);
+}
+function profileFile(...parts) {
+  let file = Services.dirsvc.get("ProfD", Ci.nsIFile).clone();
+  for (let part of parts)
+    if (part)
+      file.append(part);
+  return file.path;
+}
+var sineUtils = () => window.SineAPI?.utils || null, sineManager = () => window.SineAPI?.manager || null;
+function getSineModsDir() {
+  try {
+    let dir = sineUtils()?.modsDir;
+    if (typeof dir === "string" && dir)
+      return dir;
+  } catch {}
+  return profileFile("chrome", "sine-mods");
+}
+function getModsDataFile() {
+  try {
+    let file = sineUtils()?.modsDataFile;
+    if (typeof file === "string" && file)
+      return file;
+  } catch {}
+  return `${getSineModsDir()}/mods.json`;
+}
+function getModFolder(id) {
+  try {
+    let folder = sineUtils()?.getModFolder?.(id);
+    if (typeof folder === "string" && folder)
+      return folder;
+  } catch {}
+  return `${getSineModsDir()}/${id}`;
+}
+function legacyModsDir() {
+  return profileFile("sine-mods");
+}
+async function readText(path) {
+  if (typeof IOUtils.readUTF8 === "function")
+    return IOUtils.readUTF8(path);
+  let bytes = await IOUtils.read(path);
+  return (/* @__PURE__ */ new TextDecoder()).decode(bytes);
+}
+async function writeText(path, text) {
+  if (typeof IOUtils.writeUTF8 === "function")
+    return IOUtils.writeUTF8(path, String(text ?? ""));
+  let data = (/* @__PURE__ */ new TextEncoder()).encode(String(text ?? ""));
+  return IOUtils.write(path, data, { tmpPath: path + ".tmp" });
+}
+async function ensureDir(path) {
+  try {
+    if (typeof IOUtils.makeDirectory === "function") {
+      await IOUtils.makeDirectory(path, { createAncestors: !0, ignoreExisting: !0 });
+      return;
+    }
+  } catch {}
+  try {
+    let file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+    if (file.initWithPath(path), !file.exists())
+      file.create(Ci.nsIFile.DIRECTORY_TYPE, 493);
+  } catch (e) {
+    throw PREFS2.debugError("Could not create mod directory:", e), e;
+  }
+}
+async function getInstalledMods() {
+  try {
+    let mods = await sineUtils()?.getMods?.(), count = mods && typeof mods === "object" ? Object.keys(mods).length : 0;
+    return PREFS2.debugLog(`Build: Sine reports ${count} installed mod(s).`), mods && typeof mods === "object" ? mods : {};
+  } catch (e) {
+    return PREFS2.debugError("Could not list Sine mods:", e), {};
+  }
+}
+async function resolveModDir(modId) {
+  PREFS2.debugLog(`Build: resolving dir for mod "${modId}".`);
+  let mod = (await getInstalledMods())?.[modId];
+  for (let key of ["path", "dir", "location", "root", "folder"])
+    if (mod?.[key] && typeof mod[key] === "string")
+      try {
+        if (await IOUtils.exists(mod[key]))
+          return PREFS2.debugLog(`Build: resolved "${modId}" via metadata key "${key}": ${mod[key]}`), mod[key];
+      } catch {}
+  let direct = getModFolder(modId);
+  try {
+    if (await IOUtils.exists(direct))
+      return PREFS2.debugLog(`Build: resolved "${modId}" at ${direct}`), direct;
+  } catch (e) {
+    PREFS2.debugLog(`Build: exists check failed for ${direct}:`, e?.message || e);
+  }
+  try {
+    let base = getSineModsDir();
+    PREFS2.debugLog(`Build: scanning ${base} for theme id "${modId}".`);
+    let children = await IOUtils.getChildren(base);
+    for (let child of children)
+      try {
+        let themePath = `${child}/theme.json`;
+        if (!await IOUtils.exists(themePath))
+          continue;
+        if (JSON.parse(await readText(themePath))?.id === modId)
+          return PREFS2.debugLog(`Build: resolved "${modId}" via theme.json scan: ${child}`), child;
+      } catch {}
+  } catch (e) {
+    PREFS2.debugError("Could not scan sine-mods dir:", e);
+  }
+  return PREFS2.debugLog(`Build: no existing dir for "${modId}", returning ${direct}`), direct;
+}
+var AGENT_DOCS = [
+  "AGENTS.override.md",
+  "AGENTS.md",
+  "AGENT.md",
+  "CLAUDE.md",
+  "GEMINI.md",
+  "CODEX.md"
+], READABLE_FILES = [
+  "theme.json",
+  "index.js",
+  "style.css",
+  "README.md",
+  ...AGENT_DOCS,
+  "preferences.json"
+];
+async function readModFiles(modId, files = ["theme.json"]) {
+  let dir = await resolveModDir(modId), out = { modId, dir, files: {} }, wanted = files.includes("all") ? [...READABLE_FILES] : [...files];
+  for (let file of wanted) {
+    let path = `${dir}/${file}`;
+    try {
+      if (!await IOUtils.exists(path)) {
+        out.files[file] = null;
+        continue;
+      }
+      let text = await readText(path);
+      out.files[file] = text;
+    } catch (e) {
+      out.files[file] = `[Read error: ${e?.message || e}]`;
+    }
+  }
+  try {
+    let themeText = out.files["theme.json"];
+    if (typeof themeText === "string" && !themeText.startsWith("[Read error")) {
+      let theme = JSON.parse(themeText), discovered = [
+        ...Object.keys(theme?.scripts || {}),
+        theme?.style?.chrome,
+        theme?.style?.content
+      ].filter((f) => typeof f === "string" && !(f in out.files));
+      for (let file of discovered)
+        try {
+          if (!await IOUtils.exists(`${dir}/${file}`))
+            continue;
+          let text = await readText(`${dir}/${file}`);
+          out.files[file] = text;
+        } catch {}
+    }
+  } catch {}
+  if (out.files["theme.json"])
+    for (let doc of AGENT_DOCS) {
+      if (doc in out.files)
+        continue;
+      try {
+        let docPath = `${dir}/${doc}`;
+        if (await IOUtils.exists(docPath)) {
+          let text = await readText(docPath);
+          out.files[doc] = text;
+          break;
+        }
+      } catch {}
+    }
+  return out;
+}
+function themeTemplate({ id, name, description, author, hasJS }) {
+  let today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  return {
+    id,
+    name,
+    description: description || `${name} - created with BrowseBot.`,
+    homepage: BROWSEBOT_REPO_URL,
+    style: { chrome: "style.css" },
+    ...hasJS ? { scripts: { [`${id}.uc.js`]: { include: ["chrome://browser/content/browser.xhtml"] } } } : {},
+    author,
+    version: "1.0.0",
+    tags: ["browsebot"],
+    createdAt: today,
+    updatedAt: today,
+    fork: ["zen"]
+  };
+}
+function readmeTemplate({ name, description, author, hasJS, scriptFile }) {
+  let files = [
+    "- `theme.json` - mod metadata (id, version, author)",
+    ...hasJS ? [
+      `- \`${scriptFile}\` - browser-chrome JavaScript (filename must match the \`scripts\` key in theme.json)`
+    ] : [],
+    "- `style.css` - browser-chrome CSS"
+  ].join(`
+`);
+  return `# ${name}
+
+${description || "A Zen Browser mod created with BrowseBot."}
+
+> Made with [BrowseBot](${BROWSEBOT_REPO_URL}) (${author}).
+
+## Files
+
+${files}
+
+## Development
+
+Edit the files, then rebuild/reload Sine mods to apply changes.
+`;
+}
+async function writeJSON(path, obj) {
+  if (typeof IOUtils.writeJSON === "function")
+    return IOUtils.writeJSON(path, obj);
+  return writeText(path, JSON.stringify(obj, null, 2) + `
+`);
+}
+async function registerModInSine(theme) {
+  let modsFile = getModsDataFile(), mods = {};
+  try {
+    if (await IOUtils.exists(modsFile))
+      mods = await IOUtils.readJSON(modsFile) || {};
+  } catch (e) {
+    PREFS2.debugLog(`Build: could not read ${modsFile}, starting fresh:`, e?.message || e);
+  }
+  let prev = mods[theme.id] || {};
+  mods[theme.id] = {
+    ...theme,
+    enabled: typeof prev.enabled === "boolean" ? prev.enabled : !0,
+    "no-updates": !0
+  }, PREFS2.debugLog(`Build: registering "${theme.id}" in ${modsFile} (enabled: ${mods[theme.id].enabled}).`), await writeJSON(modsFile, mods);
+}
+function reloadSineMods() {
+  let manager = sineManager();
+  try {
+    PREFS2.debugLog("Build: calling SineAPI.manager.rebuildMods()."), manager?.rebuildMods?.();
+  } catch (e) {
+    PREFS2.debugError("rebuildMods failed:", e);
+  }
+  try {
+    manager?.loadMods?.();
+  } catch (e) {
+    PREFS2.debugLog("Build: loadMods unavailable:", e?.message || e);
+  }
+}
+async function createSineMod({ name, description, css = "", js = "", id, author }) {
+  let modName = String(name || "BrowseBot Mod").slice(0, 80), modId = slugify(id || modName), base = getSineModsDir();
+  PREFS2.debugLog(`Build: creating mod "${modName}" (id: ${modId}) in ${base}.`);
+  try {
+    let stale = `${legacyModsDir()}/${modId}`;
+    if (await IOUtils.exists(stale)) {
+      let isOurs = !1;
+      try {
+        isOurs = isBrowseBotAuthor(JSON.parse(await readText(`${stale}/theme.json`))?.author);
+      } catch {}
+      if (isOurs)
+        PREFS2.debugLog(`Build: removing stale dir from old location: ${stale}`), await IOUtils.remove(stale, { recursive: !0 });
+      else
+        PREFS2.debugLog(`Build: stale dir ${stale} is not BrowseBot-owned, leaving it alone.`);
+    }
+  } catch (e) {
+    PREFS2.debugLog("Build: stale-dir cleanup skipped:", e?.message || e);
+  }
+  let dir = `${base}/${modId}`;
+  try {
+    if (await IOUtils.exists(dir)) {
+      let reuse = !1;
+      try {
+        let existing = JSON.parse(await readText(`${dir}/theme.json`));
+        reuse = isBrowseBotAuthor(existing?.author);
+      } catch {}
+      if (PREFS2.debugLog(`Build: dir ${dir} exists, BrowseBot-owned: ${reuse}.`), reuse)
+        try {
+          if (await IOUtils.exists(`${dir}/index.js`))
+            await IOUtils.remove(`${dir}/index.js`);
+        } catch {}
+      else
+        modId = `${modId}-${Date.now().toString(36)}`, dir = `${base}/${modId}`, PREFS2.debugLog(`Build: dir taken, using ${dir}.`);
+    }
+  } catch (e) {
+    PREFS2.debugLog("Build: exists check failed:", e?.message || e);
+  }
+  PREFS2.debugLog(`Build: ensuring dir ${dir}.`), await ensureDir(dir);
+  let hasJS = !!String(js || "").trim(), theme = themeTemplate({ id: modId, name: modName, description, author, hasJS }), scriptFile = hasJS ? Object.keys(theme.scripts)[0] : null, styleFile = theme.style?.chrome || "style.css", payload = {
+    "theme.json": JSON.stringify(theme, null, 2) + `
+`,
+    [styleFile]: String(css || `/* ${modName} */
+`) + `
+`,
+    ...hasJS ? { [scriptFile]: String(js) + `
+` } : {},
+    "README.md": readmeTemplate({ name: modName, description, author, hasJS, scriptFile }) + `
+`
+  };
+  for (let [file, text] of Object.entries(payload))
+    PREFS2.debugLog(`Build: writing ${dir}/${file} (${text.length} chars).`), await writeText(`${dir}/${file}`, text);
+  let verified = [];
+  for (let file of Object.keys(payload))
+    try {
+      if (await IOUtils.exists(`${dir}/${file}`))
+        verified.push(file);
+    } catch {}
+  if (PREFS2.debugLog(`Build: verified ${verified.length}/${Object.keys(payload).length} files on disk.`), verified.length !== Object.keys(payload).length)
+    throw Error(`Wrote ${verified.length}/${Object.keys(payload).length} files to ${dir}. Directory may not be writable.`);
+  await registerModInSine(theme), reloadSineMods(), PREFS2.debugLog(`Build: created mod "${modId}" at ${dir}.`);
+  let jsBlocked = hasJS && !isUnsafeJSAllowed();
+  if (jsBlocked)
+    PREFS2.debugLog(`Build: mod "${modId}" has JS but ${UNSAFE_JS_PREF} is off.`);
+  return { id: modId, dir, name: modName, files: verified, jsBlocked };
+}
+async function writeModFile(modId, file, content2, mode = "replace") {
+  if (typeof file !== "string" || file.includes("..") || file.includes("/") || file.includes("\\") || !/\.(js|mjs|css|json|md)$/.test(file))
+    return {
+      error: `Refusing to write "${file}". Must be a single .js/.mjs/.css/.json/.md filename.`
+    };
+  let dir = await resolveModDir(modId), path = `${dir}/${file}`;
+  PREFS2.debugLog(`Build: writing ${path} (${String(content2 ?? "").length} chars, mode: ${mode === "append" ? "append" : "replace"}).`);
+  try {
+    let text = String(content2 ?? "");
+    if (mode === "append")
+      try {
+        if (await IOUtils.exists(path))
+          text = await readText(path) + `
+` + text;
+      } catch {}
+    await writeText(path, text);
+    let ok = await IOUtils.exists(path).catch(() => !1);
+    if (PREFS2.debugLog(`Build: verify ${path}: ${ok ? "on disk" : "MISSING"}.`), !ok)
+      return {
+        error: `Write reported success but ${file} is missing at ${dir}. Directory may not be writable.`
+      };
+    if (file === "theme.json")
+      try {
+        await registerModInSine(JSON.parse(text));
+      } catch (e) {
+        PREFS2.debugLog("Build: could not re-register theme.json:", e?.message || e);
+      }
+    return reloadSineMods(), { result: `Wrote ${file} in mod "${modId}" at ${dir}. Reload Sine mods to apply.` };
+  } catch (e) {
+    return PREFS2.debugError(`Failed to write ${file} in mod "${modId}":`, e), { error: `Failed to write ${file}: ${e?.message || e}` };
+  }
+}
+
+// findbar-ai/library/build-tools.js
+var createTool = (description, parameters, executeFn) => ({
+  description,
+  parameters: obj(parameters),
+  execute: executeFn
+}), BUILD_NO_CONFIRM = /* @__PURE__ */ new Set([
+  "applyPreviewCSS",
+  "inspectChrome",
+  "listMods",
+  "readMod",
+  "getPreviewState",
+  "clearPreview"
+]);
+function currentModelName() {
+  try {
+    let provider = String(PREFS2.llmProvider || "pollinations"), model = PREFS2.getPref(`extension.browse-bot.${provider}-model`);
+    return String(model || provider);
+  } catch {
+    return "unknown";
+  }
+}
+function buildAuthor() {
+  return browseBotAuthor(currentModelName());
+}
+function previewValue(value, limit = 2000) {
+  let text;
+  try {
+    text = typeof value === "string" ? value : JSON.stringify(value ?? null);
+  } catch {
+    text = String(value);
+  }
+  if (text.length > limit)
+    return text.slice(0, limit) + `
+[Truncated.]`;
+  return text;
+}
+async function runChromeJS(args) {
+  let { code } = args;
+  if (!code || !String(code).trim())
+    return { error: "runChromeJS requires code." };
+  let logs = [], methods = ["log", "info", "warn", "error", "debug"], realConsole = {};
+  for (let m of methods)
+    realConsole[m] = console[m]?.bind?.(console);
+  let capture = (m) => (...a) => {
+    try {
+      logs.push(`[${m}] ${a.map((x) => previewValue(x, 500)).join(" ")}`.slice(0, 1000));
+    } catch {}
+    try {
+      realConsole[m]?.(...a);
+    } catch {}
+  };
+  try {
+    let Cu = Components.utils, sandbox = Cu.Sandbox(window, { sandboxPrototype: window, wantXrays: !0 });
+    sandbox.console = {
+      log: capture("log"),
+      info: capture("info"),
+      warn: capture("warn"),
+      error: capture("error"),
+      debug: capture("debug")
+    }, sandbox.__browsebotCleanup = (fn) => addCleanup(fn);
+    let result = Cu.evalInSandbox(`;(async () => {
+${String(code)}
+})()`, sandbox);
+    if (result && typeof result.then === "function")
+      result = await result;
+    return setStagedJS(String(code)), { result: previewValue(result), logs: logs.slice(0, 50) };
+  } catch (e) {
+    return PREFS2.debugError("runChromeJS failed:", e), { error: `${e?.name || "Error"}: ${e?.message || e}`, logs: logs.slice(0, 50) };
+  }
+}
+async function applyPreviewCSSExec(args) {
+  let { css, verifySelector } = args;
+  if (!css || !String(css).trim())
+    return { error: "applyPreviewCSS requires css." };
+  let { appliedChars } = applyPreviewCSS(String(css)), out = {
+    result: `Preview CSS applied (${appliedChars} chars). Ask the user to look at the browser chrome, then iterate or offer to save it as a mod.`
+  };
+  if (verifySelector && String(verifySelector).trim())
+    try {
+      let el = document.querySelector(String(verifySelector));
+      if (!el)
+        out.verify = {
+          selector: verifySelector,
+          matched: !1,
+          hint: "No element matches. Try '#navigator-toolbox', '#tabbrowser-tabs', or '.toolbarbutton-1'."
+        };
+      else {
+        let computed = {};
+        try {
+          let cs = getComputedStyle(el);
+          for (let prop of ["display", "color", "background-color", "border-radius", "opacity"])
+            computed[prop] = cs.getPropertyValue(prop);
+        } catch {}
+        out.verify = { selector: verifySelector, matched: !0, computed };
+      }
+    } catch (e) {
+      out.verify = { selector: verifySelector, matched: !1, hint: `${e?.message || e}` };
+    }
+  return out;
+}
+async function inspectChrome(args) {
+  let { selector } = args;
+  try {
+    let el = selector ? document.querySelector(selector) : document.documentElement;
+    if (!el)
+      return {
+        error: `No element matches "${selector}". Try a simpler selector, e.g. "#navigator-toolbox", "#tabbrowser-tabs", ".toolbarbutton-1".`
+      };
+    let attrs = {};
+    try {
+      for (let a of el.attributes || [])
+        attrs[a.name] = String(a.value).slice(0, 200);
+    } catch {}
+    let computed = {};
+    try {
+      let cs = getComputedStyle(el);
+      for (let prop of [
+        "display",
+        "color",
+        "background-color",
+        "background-image",
+        "border-color",
+        "border-radius",
+        "padding",
+        "margin",
+        "font-size",
+        "opacity"
+      ])
+        computed[prop] = cs.getPropertyValue(prop);
+    } catch {}
+    let children = [];
+    try {
+      for (let child of el.children || [])
+        if (children.push(`${child.tagName.toLowerCase()}${child.id ? `#${child.id}` : ""}${child.className && typeof child.className === "string" ? `.${child.className.split(/\s+/).slice(0, 3).join(".")}` : ""}`), children.length >= 12)
+          break;
+    } catch {}
+    let parents = [];
+    try {
+      let p = el.parentElement;
+      while (p && parents.length < 3)
+        parents.push(`${p.tagName.toLowerCase()}${p.id ? `#${p.id}` : ""}`), p = p.parentElement;
+    } catch {}
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      classes: typeof el.className === "string" ? el.className.split(/\s+/).filter(Boolean).slice(0, 10) : [],
+      attributes: attrs,
+      computed,
+      parents,
+      children,
+      outerHTML: previewValue(el.outerHTML, 4000)
+    };
+  } catch (e) {
+    return { error: `inspectChrome failed: ${e?.message || e}` };
+  }
+}
+async function listMods() {
+  let mods = await getInstalledMods();
+  return { mods: Object.values(mods).map((m) => ({
+    id: m.id,
+    name: m.name,
+    author: m.author,
+    version: m.version,
+    enabled: m.enabled,
+    description: String(m.description || "").slice(0, 160),
+    browseBotOwned: isBrowseBotAuthor(m.author)
+  })) };
+}
+async function readMod(args) {
+  let { modId, files } = args;
+  if (!modId)
+    return { error: "readMod requires modId." };
+  let wanted = Array.isArray(files) && files.length ? files : ["theme.json"];
+  return readModFiles(modId, wanted);
+}
+async function createMod(args) {
+  let { name, description, css, js, id } = args, finalCss = css ?? getPreviewCSS(), finalJs = js ?? getStagedJS();
+  if (!finalCss && !finalJs)
+    return {
+      error: "Nothing to save yet. Apply preview CSS or run JS first, or pass css/js explicitly."
+    };
+  try {
+    let created = await createSineMod({
+      name: name || "BrowseBot Mod",
+      description: description || "",
+      css: String(finalCss || `/* ${name || "BrowseBot Mod"} */
+`),
+      js: String(finalJs || ""),
+      id,
+      author: buildAuthor()
+    });
+    return clearPreviewCSS(), clearStagedJS(), {
+      result: `Created mod "${created.name}" (id: ${created.id}) with ${created.files.length} files verified on disk at ${created.dir} and registered in Sine's mods.json. Staged preview was cleared. Tell the user to reopen Settings → Sine Mods to see it; restart only if the script doesn't take effect.` + (created.jsBlocked ? ' IMPORTANT: this mod contains JS but Sine is blocking scripts from unofficial sources, so its script will NOT run until the user turns on "Enable installing JS from unofficial sources" in Sine settings themselves. Tell them exactly that; never offer to change the setting for them.' : ""),
+      modId: created.id,
+      dir: created.dir,
+      files: created.files,
+      jsBlocked: created.jsBlocked
+    };
+  } catch (e) {
+    return { error: `Failed to create mod: ${e?.message || e}` };
+  }
+}
+async function updateModFile(args) {
+  let { modId, file, content: content2, mode } = args;
+  if (!modId || !file || content2 === void 0)
+    return { error: "updateModFile requires modId, file, and content." };
+  return writeModFile(modId, file, String(content2), mode === "append" ? "append" : "replace");
+}
+async function getPreviewStateTool() {
+  return {
+    ...getPreviewState(),
+    cssPreview: previewValue(getPreviewCSS(), 3000),
+    jsPreview: previewValue(getStagedJS(), 3000)
+  };
+}
+async function clearPreview() {
+  clearPreviewCSS();
+  let hadJS = getStagedJS().length > 0, reverted = revertStagedJS();
+  return {
+    result: "Cleared staged preview CSS from the browser chrome." + (hadJS ? ` Reverted staged JS (ran ${reverted.cleanups} cleanup(s), removed ${reverted.nodes} tagged node(s)). Mutations without a registered cleanup cannot be undone; restart the browser if effects persist.` : " No staged JS was stored.")
+  };
+}
+var buildTools = {
+  inspectChrome: createTool("Inspects a browser-chrome element (Firefox UI, NOT web content). Returns tag, attributes, computed styles, and HTML so you can verify selectors before styling.", {
+    selector: str("CSS selector in browser chrome, e.g. '#navigator-toolbox', '#tabbrowser-tabs .tabbrowser-tab'. Omit to inspect the root.", !0)
+  }, inspectChrome),
+  applyPreviewCSS: createTool("Applies CSS to the browser chrome as a live preview (no restart, reversible). Use for all styling iterations. No permission needed. Pass verifySelector to confirm the match and get computed styles back in the same call.", {
+    css: str("Full CSS text to preview in browser chrome."),
+    verifySelector: str("Optional chrome selector to verify in the same call, e.g. '#navigator-toolbox'. Returns whether it matched plus a few computed styles.", !0)
+  }, applyPreviewCSSExec),
+  runChromeJS: createTool("Executes JavaScript in browser-chrome context with chrome privileges. Console output is captured and returned. Requires user permission every time. Every snippet MUST be revertable: tag created nodes with data-browsebot-js and register teardown with __browsebotCleanup(fn) for listeners, observers, timers, and DOM mutations.", {
+    code: str("JavaScript to execute. Can use document, window, gBrowser, SineAPI. Async allowed. Keep it short. Tag created elements with data-browsebot-js and call __browsebotCleanup(() => {...}) to undo listeners and mutations.")
+  }, runChromeJS),
+  listMods: createTool("Lists installed Sine mods with id, name, author, and version.", {}, listMods),
+  readMod: createTool("Reads files from an installed Sine mod. Always read theme.json first; the agent docs file is auto-included when present and MUST be followed.", {
+    modId: str("The mod id from listMods."),
+    files: strArr("Files to read: theme.json, style.css, README.md, agent docs (AGENTS.md, CLAUDE.md), preferences.json, the mod's .uc.js script, or 'all'. The real script/style filenames from theme.json are auto-included.", !0)
+  }, readMod),
+  createMod: createTool("Creates a new Sine mod from staged preview CSS/JS (or explicit css/js). Author is set to BrowseBot/model automatically. Only call when the user asks for a mod, or after they confirm your offer. If the mod contains JS while Sine blocks scripts from unofficial sources, the user gets a confirmation popup first and must enable the Sine setting themselves.", {
+    name: str("Mod name, e.g. 'Cyberpunk UI'. Omit only if the user said 'just make it' - then invent a good name.", !0),
+    description: str("One-line description of what the mod does.", !0),
+    css: str("CSS for style.css. Omit to reuse the staged preview CSS.", !0),
+    js: str("JS for the mod's .uc.js script. Omit to reuse staged JS, or for a CSS-only mod.", !0),
+    id: str("Custom mod id slug. Omit to auto-generate from the name.", !0)
+  }, createMod),
+  updateModFile: createTool("Edits one file in an existing Sine mod. BrowseBot-owned mods apply directly; other authors require user permission (handled before this runs).", {
+    modId: str("The mod id."),
+    file: str("File to write: the mod's .uc.js script, style.css, theme.json, README.md, agent docs, preferences.json."),
+    content: str("Full new content of the file (or content to append)."),
+    mode: str("`replace` (default) or `append`.", !0)
+  }, updateModFile),
+  getPreviewState: createTool("Returns what CSS/JS is currently staged as a preview.", {}, getPreviewStateTool),
+  clearPreview: createTool("Removes the staged preview CSS and reverts staged JS (runs registered cleanups, removes tagged nodes). Untracked JS mutations cannot be undone.", {}, clearPreview)
+};
+async function getBuildSystemPrompt() {
+  let modIds = "";
+  try {
+    let mods = await getInstalledMods();
+    modIds = Object.values(mods).slice(0, 30).map((m) => `${m.id} (${m.name}, by ${m.author})`).join("; ");
+  } catch {}
+  return `## Build Mode - Zen Browser mod builder
+
+You build Sine mods for Zen Browser (Firefox UI). Two surfaces, never mix them:
+- BROWSER CHROME (toolbars, tabs, sidebar, URL bar, Library): styled by style.css, declared as theme.json style.chrome. This is your default target.
+- PAGE CONTENT (websites and browser internal pages such as about:newtab or settings): styled by a content stylesheet, declared as theme.json style.content. Use it only when the user asks to restyle page content. It cannot touch browser UI and has no chrome privileges. Example: "style": {"chrome": "style.css", "content": "content.css"}, with content.css scoping to an internal page via @-moz-document url("about:newtab") { body { background: #111 !important; } }.
+
+You have live tools: inspect elements, preview CSS instantly, run privileged JS, and scaffold real Sine mods.
+
+### Golden workflow (token-efficient)
+1. UNDERSTAND (CSS work only): for styling, call \`inspectChrome\` once with a targeted selector (e.g. \`#navigator-toolbox\`, \`#tabbrowser-tabs\`) to verify the match and read computed styles. For JS-driven mods, skip inspection and go straight to a short \`runChromeJS\` snippet.
+2. PREVIEW ONCE: call \`applyPreviewCSS\` a single time with the full CSS plus \`verifySelector\` set to your main selector. The result confirms the match and computed styles in the same call, so do NOT follow it with \`inspectChrome\` just to re-verify. Describe what the user should see and ask them to confirm visually. Only iterate if they report a problem or the verify block says no match.
+3. JS NEEDS PERMISSION: \`runChromeJS\` always asks the user first and its console output + return value come back to you as the tool result - read the logs, fix errors, never guess blindly. Keep snippets short and show what each snippet does in one sentence before/after. The code is executed once, then its text is staged for \`createMod\`; there is no live JS preview to re-check. Every snippet MUST be revertable so the user can undo it: tag created nodes with data-browsebot-js, never use anonymous listeners you cannot remove, save and restore anything you mutate. Example:
+  \`\`\`js
+  const btn = document.createElement("toolbarbutton");
+  btn.setAttribute("data-browsebot-js", "my-button");
+  btn.addEventListener("click", onClick, { signal: ctl.signal });
+  parent.appendChild(btn);
+  __browsebotCleanup(() => { ctl.abort(); btn.remove(); });
+  \`\`\`
+4. OFFER TO KEEP: once the preview looks right, end with exactly: "Do you want to turn this into a mod?" The UI shows a Create Mod button that saves the staged preview (name/description prompt included). If the user instead says "make it a mod" directly, call \`createMod\` yourself - invent a good name/description, never interrogate for details, author is set automatically.
+5. MOD EDITS: \`listMods\` → \`readMod\` (theme.json first). If the mod has an agent docs file it is auto-included, follow it. BrowseBot-authored mods edit freely; other authors' mods pop a permission dialog first.
+
+### Mod conventions (Sine)
+- New mods get: theme.json (id slug, name, description, author BrowseBot/<model>, version 1.0.0), style.css (browser-chrome CSS), plus <id>.uc.js only when there is JS to save (CSS-only mods ship no script at all), README.md starting with the mod name and a "> Made with [BrowseBot](${BROWSEBOT_REPO_URL})" credit line. Sine rebuilds automatically; a restart may still be needed for scripts.
+- preferences.json (optional): an array of {property, label, type} controls shown in the mod settings UI. Types per Zen docs: checkbox (boolean), dropdown (needs "options": [{"label", "value"}], string values without spaces), string (free CSS value). Optional keys: defaultValue, description, placeholder (dropdown/string), disabledOn (e.g. ["macos"]). Sine extras: number, separator, text, restart (true shows a restart hint), conditions + operator ("AND"/"OR" with nested if/not rules), margin, size, border ("value" mirrors a color input on the border). Keep property names stable; read the existing file first when editing. Full example:
+  \`\`\`json
+  [
+    {
+      "property": "mod.mymod.round-tabs",
+      "label": "Round tabs",
+      "type": "checkbox",
+      "defaultValue": true,
+      "description": "Gives tabs fully rounded corners."
+    },
+    {
+      "property": "mod.mymod.accent",
+      "label": "Accent color",
+      "type": "dropdown",
+      "defaultValue": "blue",
+      "description": "Color used for active UI highlights.",
+      "options": [
+        { "value": "blue", "label": "Blue" },
+        { "value": "green", "label": "Green" }
+      ],
+      "conditions": [{ "if": { "property": "mod.mymod.round-tabs", "value": true } }]
+    },
+    {
+      "property": "mod.mymod.tab-padding",
+      "label": "Tab padding",
+      "type": "string",
+      "placeholder": "e.g: 10px"
+    }
+  ]
+  \`\`\`
+  CSS use: checkbox/dropdown via -moz-pref, string via var() with dots changed to hyphens:
+  @media (-moz-pref("mod.mymod.round-tabs")) { .tabbrowser-tab { border-radius: 12px !important; } }
+  @media (-moz-pref("mod.mymod.accent", "green")) { .my-btn { background: green !important; } }
+  .tabbrowser-tab { padding: var(--mod-mymod-tab-padding); }
+  JS use: same property name via Services.prefs, observe for live updates:
+  const round = Services.prefs.getBoolPref("mod.mymod.round-tabs", true);
+  const accent = Services.prefs.getStringPref("mod.mymod.accent", "blue");
+  Services.prefs.addObserver("mod.mymod.accent", () => applyAccent(Services.prefs.getStringPref("mod.mymod.accent", "blue")));
+- style.chrome vs style.content: theme.json "style": {"chrome": "style.css"} targets browser UI; adding "content": "content.css" targets page content (sites and internal pages). Content CSS never sees XUL/chrome elements and chrome CSS never applies inside pages. A mod can ship both files. Example content.css for a site plus an internal page:
+  @-moz-document domain("github.com") { body { font-size: 15px !important; } }
+  @-moz-document url("about:newtab") { body { background: #111 !important; } }
+- Browser colors by default: match the user's theme with variables instead of hardcoded colors, unless the user names specific colors. You can read what is available with \`inspectChrome\` (computed block) or getComputedStyle in \`runChromeJS\`. Useful natives: var(--zen-primary-color) and var(--lwt-accent-color) for accents, var(--toolbar-bgcolor) and var(--toolbar-color) for toolbars, var(--lwt-text-color) for text, var(--toolbarbutton-icon-fill) for icons.
+- When editing: write full file content via \`updateModFile\` (or mode append for small additions). Never touch files outside the mod dir. Keep diffs minimal.
+- Installed mods (subset): ${modIds || "(could not list mods)"}
+
+### Safety
+- Prefer CSS over JS. Never exfiltrate data, never touch passwords/keys, never disable security UI, never run destructive commands. If a request looks harmful, refuse and suggest a safe alternative.
+- A mod's script only runs if Sine's "JS from unofficial sources" is on. Always ask first; only the user's own checkbox opt-in turns it on, never anything automatic.
+- Quote selectors and short code in your replies so the user sees what ran. Tool calls already render a status row; JS rows expand to show the executed code.
+- Be concise. Act with tools instead of asking clarifying questions when the intent is clear (e.g. "cyberpunk UI" → inspect once, preview once with verifySelector, offer the mod).`;
 }
 
 // findbar-ai/llm/tools.js
@@ -1402,17 +5889,34 @@ var TabIdManager = new class {
   #idTabMap = /* @__PURE__ */ new Map;
   #nextId = 1;
   _getOrCreateId(tab) {
-    if (!this.#tabIdMap.has(tab)) {
-      let id = this.#nextId++;
-      this.#tabIdMap.set(tab, id), this.#idTabMap.set(id, tab);
-    }
-    return this.#tabIdMap.get(tab);
+    let existing = this.#tabIdMap.get(tab);
+    if (existing !== void 0 && this.#idTabMap.get(existing) === tab)
+      return existing;
+    let id = this.#nextId++;
+    return this.#tabIdMap.set(tab, id), this.#idTabMap.set(id, tab), id;
   }
   getTabById(id) {
-    let numericId = Number(id), tab = this.#idTabMap.get(numericId);
-    if (tab && tab.ownerGlobal && !tab.ownerGlobal.closed && gBrowser.tabs.includes(tab))
-      return tab;
-    return this.#idTabMap.delete(numericId), null;
+    let numericId = Number(id);
+    if (Number.isInteger(numericId)) {
+      let tab = this.#idTabMap.get(numericId);
+      if (tab && tab.isConnected && !tab.closing)
+        return tab;
+      this.#idTabMap.delete(numericId);
+    }
+    if (typeof id === "string" && id)
+      try {
+        let el = document.getElementById(id);
+        if (el && el.tagName === "tab" && el.isConnected && !el.closing)
+          return el;
+      } catch {}
+    return null;
+  }
+  knownIds() {
+    let ids = [];
+    for (let [id, tab] of this.#idTabMap)
+      if (tab && tab.isConnected)
+        ids.push(id);
+    return ids.sort((a, b) => a - b);
   }
   mapTab(tab) {
     if (!tab)
@@ -1438,21 +5942,37 @@ var TabIdManager = new class {
       ...isEssential ? {} : workspaceInfos
     };
   }
-}, createStringParameter = (description, isOptional = !1) => {
-  let schema = z.string().describe(description);
-  return isOptional ? schema.optional() : schema;
-}, createStringArrayParameter = (description, isOptional = !1) => {
-  let schema = z.array(z.string()).describe(description);
-  return isOptional ? schema.optional() : schema;
-}, createTool = (description, parameters, executeFn) => tool({
+};
+function isPlaceholderTab(tab) {
+  try {
+    return tab.hasAttribute("zen-empty-tab");
+  } catch {
+    return !1;
+  }
+}
+var createStringParameter = (description, isOptional = !1) => str(description, isOptional), createStringArrayParameter = (description, isOptional = !1) => strArr(description, isOptional), createTool2 = (description, parameters, executeFn) => ({
   description,
-  inputSchema: z.object(parameters),
+  parameters: obj(parameters),
   execute: executeFn
 });
 function getTabsByIds(tabIds) {
   if (!Array.isArray(tabIds))
     tabIds = [tabIds];
   return tabIds.map((id) => TabIdManager.getTabById(id)).filter(Boolean);
+}
+function missingTabIds(tabIds) {
+  if (!Array.isArray(tabIds))
+    tabIds = [tabIds];
+  return tabIds.filter((id) => !TabIdManager.getTabById(id)).map((id) => String(id));
+}
+function unknownTabsError(missing) {
+  let known = "";
+  try {
+    let ids = TabIdManager.knownIds();
+    if (ids.length)
+      known = ` Known tab ids right now: ${ids.join(", ")}.`;
+  } catch {}
+  return `No tabs found for ids: ${missing.join(", ")}.${known} Copy the exact "id" values from getAllTabs or searchTabs output; never invent, prefix, or derive them.`;
 }
 function mapTabToObject(tab) {
   return TabIdManager.mapTab(tab);
@@ -1521,7 +6041,30 @@ async function newSplit(args) {
 }
 async function getAllTabs() {
   try {
-    return { tabs: gZenWorkspaces.allStoredTabs.map(mapTabToObject).filter(Boolean) };
+    let tabs = [], folders = /* @__PURE__ */ new Map;
+    for (let tab of gZenWorkspaces.allStoredTabs) {
+      if (isPlaceholderTab(tab)) {
+        let group = tab.group;
+        if (group?.isZenFolder && !group.hasAttribute("split-view-group")) {
+          if (!folders.has(group.id))
+            folders.set(group.id, { id: group.id, name: group.label || "Unnamed", tabCount: 0 });
+        }
+        continue;
+      }
+      let mapped = mapTabToObject(tab);
+      if (!mapped)
+        continue;
+      if (tabs.push(mapped), mapped.parentFolderId) {
+        if (!folders.has(mapped.parentFolderId))
+          folders.set(mapped.parentFolderId, {
+            id: mapped.parentFolderId,
+            name: mapped.parentFolderName || "Unnamed",
+            tabCount: 0
+          });
+        folders.get(mapped.parentFolderId).tabCount++;
+      }
+    }
+    return { tabs, folders: [...folders.values()] };
   } catch (e) {
     return PREFS2.debugError("Failed to get all tabs:", e), { error: "Failed to retrieve tabs." };
   }
@@ -1533,7 +6076,7 @@ async function closeTabs(args) {
   try {
     let tabsToClose = getTabsByIds(tabIds);
     if (tabsToClose.length === 0)
-      return { error: "No matching tabs found to close." };
+      return { error: unknownTabsError(missingTabIds(tabIds)) };
     return gBrowser.removeTabs(tabsToClose), { result: `Successfully closed ${tabsToClose.length} tab(s).` };
   } catch (e) {
     return PREFS2.debugError("Failed to close tabs:", e), { error: "An error occurred while closing tabs." };
@@ -1548,7 +6091,7 @@ async function splitExistingTabs(args) {
   try {
     let tabs = getTabsByIds(tabIds);
     if (tabs.length < 2)
-      return { error: "Could not find at least two tabs to split." };
+      return { error: unknownTabsError(missingTabIds(tabIds)) };
     let gridType, lowerType = type.toLowerCase();
     if (lowerType === "grid")
       gridType = "grid";
@@ -1562,15 +6105,14 @@ async function splitExistingTabs(args) {
   }
 }
 async function searchTabs(args) {
-  let { query } = args;
+  let { query } = args || {};
   if (!query)
     return { error: "searchTabs requires a query." };
-  let lowerCaseQuery = query.toLowerCase();
   try {
-    return { tabs: gZenWorkspaces.allStoredTabs.filter((tab) => {
-      let title = tab.label?.toLowerCase() || "", url = tab.linkedBrowser?.currentURI?.spec?.toLowerCase() || "";
-      return title.includes(lowerCaseQuery) || url.includes(lowerCaseQuery);
-    }).map(mapTabToObject).filter(Boolean) };
+    return { tabs: gZenWorkspaces.allStoredTabs.filter((tab) => !isPlaceholderTab(tab)).map((tab) => {
+      let title = tab.label || "", url = tab.linkedBrowser?.currentURI?.spec || "";
+      return { tab, score: bestFuzzyScore([title, url], query) };
+    }).filter(({ score }) => score > 0).sort((a, b) => b.score - a.score).map(({ tab }) => mapTabToObject(tab)).filter(Boolean) };
   } catch (e) {
     return PREFS2.debugError(`Error searching tabs for query "${query}":`, e), { error: "Failed to search tabs." };
   }
@@ -1582,9 +6124,11 @@ async function addTabsToFolder(args) {
   try {
     let tabs = getTabsByIds(tabIds), folder = document.getElementById(folderId);
     if (!folder || !folder.isZenFolder)
-      return { error: `Folder with ID "${folderId}" not found or is not a valid folder.` };
+      return {
+        error: `Folder with ID "${folderId}" not found. Use the folder "id" from createTabFolder's result, not its name.`
+      };
     if (tabs.length === 0)
-      return { error: "No valid tabs found to add to the folder." };
+      return { error: unknownTabsError(missingTabIds(tabIds)) };
     for (let tab of tabs)
       if (!tab.pinned)
         gBrowser.pinTab(tab);
@@ -1600,7 +6144,7 @@ async function removeTabsFromFolder(args) {
   try {
     let tabs = getTabsByIds(tabIds);
     if (tabs.length === 0)
-      return { error: "No valid tabs found." };
+      return { error: unknownTabsError(missingTabIds(tabIds)) };
     let ungroupedCount = 0;
     return tabs.forEach((tab) => {
       if (tab.group)
@@ -1611,21 +6155,64 @@ async function removeTabsFromFolder(args) {
   }
 }
 async function createTabFolder(args) {
-  let { name } = args;
-  if (!name)
-    return { error: "createTabFolder requires a name." };
+  let { name, names } = args || {}, targets = Array.isArray(names) && names.length ? names : name ? [name] : [];
+  if (!targets.length)
+    return { error: "createTabFolder requires a name, or a names array." };
   try {
-    let folder = gZenFolders.createFolder([], { label: name, renameFolder: !1 });
-    return {
-      result: `Successfully created folder "${folder.label}".`,
-      folder: {
-        id: folder.id,
-        name: folder.label
-      }
-    };
+    let folders = targets.map((label) => {
+      let folder = gZenFolders.createFolder([], { label, renameFolder: !1 });
+      return { id: folder.id, name: folder.label };
+    });
+    if (targets.length === 1)
+      return {
+        result: `Successfully created folder "${folders[0].name}".`,
+        folder: folders[0]
+      };
+    return { result: `Successfully created ${folders.length} folders.`, folders };
   } catch (e) {
     return PREFS2.debugError("Failed to create tab folder:", e), { error: "Failed to create tab folder." };
   }
+}
+async function deleteTabFolder(args) {
+  let { folderId, folderIds } = args || {}, targets = Array.isArray(folderIds) && folderIds.length ? folderIds : folderId ? [folderId] : [];
+  if (!targets.length)
+    return { error: "deleteTabFolder requires a folderId, or a folderIds array." };
+  let deleted = [], failed = [];
+  for (let id of targets)
+    try {
+      let folder = document.getElementById(id);
+      if (!folder || !folder.isZenFolder) {
+        failed.push(id);
+        continue;
+      }
+      let name = folder.label || String(id), memberTabs = gZenWorkspaces.allStoredTabs.filter((tab) => tab.group === folder && !isPlaceholderTab(tab));
+      for (let tab of memberTabs)
+        try {
+          gBrowser.ungroupTab(tab);
+        } catch {}
+      if (typeof gZenFolders?.removeFolder === "function")
+        await gZenFolders.removeFolder(folder);
+      else if (typeof folder.delete === "function")
+        await folder.delete();
+      else
+        folder.remove();
+      deleted.push({ id: String(id), name, ungrouped: memberTabs.length });
+    } catch (e) {
+      PREFS2.debugError(`Failed to delete tab folder "${id}":`, e), failed.push(id);
+    }
+  if (targets.length === 1) {
+    if (!deleted.length)
+      return {
+        error: `No folder found with id "${targets[0]}". Copy the exact "id" from getAllTabs output; never invent it or use the folder name.`
+      };
+    let d = deleted[0];
+    return { result: `Deleted folder "${d.name}". ${d.ungrouped} tab(s) kept open.` };
+  }
+  return {
+    result: `Deleted ${deleted.length}/${targets.length} folders. Contained tabs were kept open.`,
+    deleted: deleted.map((d) => d.id),
+    failed
+  };
 }
 async function reorderTab(args) {
   let { tabId, newIndex } = args;
@@ -1634,7 +6221,7 @@ async function reorderTab(args) {
   try {
     let tab = TabIdManager.getTabById(tabId);
     if (!tab)
-      return { error: `Tab with id ${tabId} not found.` };
+      return { error: unknownTabsError([tabId]) };
     return gBrowser.moveTabTo(tab, { tabIndex: newIndex }), { result: `Successfully moved tab to index ${newIndex}.` };
   } catch (e) {
     return PREFS2.debugError("Failed to reorder tab:", e), { error: "Failed to reorder tab." };
@@ -1647,7 +6234,7 @@ async function addTabsToEssentials(args) {
   try {
     let tabs = getTabsByIds(tabIds);
     if (tabs.length === 0)
-      return { error: "No matching tabs found." };
+      return { error: unknownTabsError(missingTabIds(tabIds)) };
     if (window.gZenPinnedTabManager)
       return gZenPinnedTabManager.addToEssentials(tabs), { result: `Successfully added ${tabs.length} tab(s) to essentials.` };
     else
@@ -1663,9 +6250,9 @@ async function removeTabsFromEssentials(args) {
   try {
     let tabs = getTabsByIds(tabIds);
     if (tabs.length === 0)
-      return { error: "No matching tabs found." };
+      return { error: unknownTabsError(missingTabIds(tabIds)) };
     if (window.gZenPinnedTabManager)
-      return tabs.forEach((tab) => gZenPinnedTabManager.removeFromEssentials(tab)), { result: `Successfully removed ${tabs.length} tab(s) from essentials.` };
+      return tabs.forEach((tab) => gZenPinnedTabManager.removeEssentials(tab)), { result: `Successfully removed ${tabs.length} tab(s) from essentials.` };
     else
       return { error: "Essentials manager is not available." };
   } catch (e) {
@@ -1701,17 +6288,39 @@ async function getAllBookmarks() {
     return PREFS2.debugError("Error reading all bookmarks:", e), { error: "Failed to read all bookmarks." };
   }
 }
+async function insertBookmark({ url, title, parentID }) {
+  let bm = await PlacesUtils.bookmarks.insert({
+    parentGuid: parentID || PlacesUtils.bookmarks.toolbarGuid,
+    url: new URL(url),
+    title: title || url
+  });
+  return { id: bm.guid, title: bm.title, url };
+}
 async function createBookmark(args) {
-  let { url, title, parentID } = args;
+  let { url, title, parentID, bookmarks } = args || {};
+  if (Array.isArray(bookmarks) && bookmarks.length) {
+    let created = [];
+    for (let item of bookmarks) {
+      if (!item || !item.url) {
+        created.push({ error: "Each bookmark needs a url." });
+        continue;
+      }
+      try {
+        created.push({
+          result: `Bookmarked "${item.title || item.url}".`,
+          ...await insertBookmark({ ...item, parentID: item.parentID || parentID })
+        });
+      } catch (e) {
+        PREFS2.debugError(`Error creating bookmark for URL "${item.url}":`, e), created.push({ error: `Failed to bookmark "${item.url}".` });
+      }
+    }
+    return { result: `Created ${created.filter((r) => !r.error).length}/${created.length} bookmarks.`, bookmarks: created };
+  }
   if (!url)
-    return { error: "createBookmark requires a URL." };
+    return { error: "createBookmark requires a URL, or a bookmarks array." };
   try {
-    let bookmarkInfo = {
-      parentGuid: parentID || PlacesUtils.bookmarks.toolbarGuid,
-      url: new URL(url),
-      title: title || url
-    }, bm = await PlacesUtils.bookmarks.insert(bookmarkInfo);
-    return PREFS2.debugLog("Bookmark created successfully:", JSON.stringify(bm)), { result: `Successfully bookmarked "${bm.title}".` };
+    let bm = await insertBookmark({ url, title, parentID });
+    return PREFS2.debugLog("Bookmark created successfully:", JSON.stringify(bm)), { result: `Successfully bookmarked "${bm.title}".`, id: bm.id };
   } catch (e) {
     return PREFS2.debugError(`Error creating bookmark for URL "${url}":`, e), { error: "Failed to create bookmark." };
   }
@@ -1732,41 +6341,70 @@ async function addBookmarkFolder(args) {
   }
 }
 async function updateBookmark(args) {
-  let { id, url, title, parentID } = args;
+  let { id, url, title, parentID } = args || {};
   if (!id)
     return { error: "updateBookmark requires a bookmark id (guid)." };
-  if (!url && !title && !parentID)
+  if (url === void 0 && title === void 0 && !parentID)
     return {
-      error: "updateBookmark requires either a new url, title, or parentID."
+      error: "updateBookmark requires a new url, title, or parentID."
     };
   try {
     let oldBookmark = await PlacesUtils.bookmarks.fetch(id);
     if (!oldBookmark)
       return { error: `No bookmark found with id "${id}".` };
-    let bm = await PlacesUtils.bookmarks.update({
+    if (url !== void 0 && oldBookmark.type !== PlacesUtils.bookmarks.TYPE_BOOKMARK)
+      return { error: "Only URL bookmarks have a URL to update." };
+    let newUrl = oldBookmark.url;
+    if (url !== void 0)
+      try {
+        newUrl = new URL(url);
+      } catch {
+        return { error: `"${url}" is not a valid URL.` };
+      }
+    let info = {
       guid: id,
-      url: url ? new URL(url) : oldBookmark.url,
-      title: title || oldBookmark.title,
-      parentGuid: parentID || oldBookmark.parentGuid
-    });
+      url: newUrl,
+      title: title !== void 0 ? title : oldBookmark.title
+    };
+    if (parentID)
+      info.parentGuid = parentID, info.index = PlacesUtils.bookmarks.DEFAULT_INDEX;
+    let bm = await PlacesUtils.bookmarks.update(info);
     return PREFS2.debugLog("Bookmark updated successfully:", JSON.stringify(bm)), { result: `Successfully updated bookmark to "${bm.title}".` };
   } catch (e) {
     return PREFS2.debugError(`Error updating bookmark with id "${id}":`, e), { error: "Failed to update bookmark." };
   }
 }
 async function deleteBookmark(args) {
-  let { id } = args;
-  if (!id)
-    return { error: "deleteBookmark requires a bookmark id (guid)." };
+  let { id, ids } = args || {}, targets = Array.isArray(ids) && ids.length ? ids : id ? [id] : [];
+  if (!targets.length)
+    return { error: "deleteBookmark requires a bookmark id (guid), or an ids array." };
   try {
-    return await PlacesUtils.bookmarks.remove(id), PREFS2.debugLog(`Bookmark with id "${id}" deleted successfully.`), { result: "Successfully deleted bookmark." };
+    let deleted = [], failed = [];
+    for (let guid of targets)
+      try {
+        await PlacesUtils.bookmarks.remove(guid), deleted.push(guid);
+      } catch (e) {
+        PREFS2.debugError(`Error deleting bookmark with id "${guid}":`, e), failed.push(guid);
+      }
+    if (targets.length === 1)
+      return failed.length ? { error: "Failed to delete bookmark." } : { result: "Successfully deleted bookmark." };
+    return { result: `Deleted ${deleted.length}/${targets.length} bookmarks.`, deleted, failed };
   } catch (e) {
-    return PREFS2.debugError(`Error deleting bookmark with id "${id}":`, e), { error: "Failed to delete bookmark." };
+    return PREFS2.debugError("Error deleting bookmarks:", e), { error: "Failed to delete bookmark." };
   }
 }
 async function getAllWorkspaces() {
   try {
-    let { workspaces } = await gZenWorkspaces._workspaces(), activeWorkspaceId = gZenWorkspaces.activeWorkspace;
+    let workspaces = null;
+    if (typeof gZenWorkspaces?.getWorkspaces === "function")
+      workspaces = await gZenWorkspaces.getWorkspaces();
+    else if (typeof gZenWorkspaces?._workspaces === "function") {
+      let res = await gZenWorkspaces._workspaces();
+      workspaces = Array.isArray(res) ? res : res?.workspaces;
+    }
+    if (!Array.isArray(workspaces))
+      throw Error("Workspace list unavailable.");
+    let activeWorkspaceId = gZenWorkspaces.activeWorkspace;
     return { workspaces: workspaces.map((ws) => ({
       id: ws.uuid,
       name: ws.name,
@@ -1828,7 +6466,7 @@ async function moveTabsToWorkspace(args) {
   try {
     let tabs = getTabsByIds(tabIds);
     if (tabs.length === 0)
-      return { error: "No valid tabs found to move." };
+      return { error: unknownTabsError(missingTabIds(tabIds)) };
     return gZenWorkspaces.moveTabsToWorkspace(tabs, workspaceId), { result: `Successfully moved ${tabs.length} tab(s) to workspace.` };
   } catch (e) {
     return PREFS2.debugError("Failed to move tabs to workspace:", e), { error: "Failed to move tabs to workspace." };
@@ -1844,19 +6482,19 @@ async function reorderWorkspace(args) {
     return PREFS2.debugError("Failed to reorder workspace:", e), { error: "Failed to reorder workspace." };
   }
 }
-async function clickElement(args) {
-  let { selector } = args;
+async function clickElement(args, opts) {
+  let { selector } = args || {};
   if (!selector)
     return { error: "clickElement requires a selector." };
-  return messageManagerAPI.clickElement(selector);
+  return messageManagerAPI.clickElement(selector, opts);
 }
-async function fillForm(args) {
-  let { selector, value } = args;
+async function fillForm(args, opts) {
+  let { selector, value } = args || {};
   if (!selector)
     return { error: "fillForm requires a selector." };
   if (value === void 0)
     return { error: "fillForm requires a value." };
-  return messageManagerAPI.fillForm(selector, value);
+  return messageManagerAPI.fillForm(selector, value, opts);
 }
 async function showCustomToast(args) {
   let { title, description } = args;
@@ -1872,44 +6510,64 @@ async function showCustomToast(args) {
     return PREFS2.debugError("Failed to show toast:", e), { error: "An error occurred while displaying the toast." };
   }
 }
-async function getYoutubeComments(args) {
-  return messageManagerAPI.getYoutubeComments(args.count);
+async function getYoutubeTranscript(args, opts) {
+  if (!messageManagerAPI.currentUrlIsYouTubeVideo())
+    return {
+      error: "Current page is not a YouTube video. Only use this tool on youtube.com/watch pages."
+    };
+  try {
+    let video = await getVideoContext(messageManagerAPI.getUrlAndTitle().url, 0);
+    if (video && video.text)
+      return { transcript: video.text };
+  } catch (e) {
+    PREFS2.debugLog("Captions API transcript failed, falling back to page transcript.", e?.message);
+  }
+  return messageManagerAPI.getYoutubeTranscript(opts);
 }
-var toolNameMapping = {
-  search: "Searching the web",
-  openLink: "Opening a link",
-  newSplit: "Creating a split view",
-  splitExistingTabs: "Splitting existing tabs",
-  getAllTabs: "Reading tabs",
-  searchTabs: "Searching tabs",
-  closeTabs: "Closing tabs",
-  reorderTab: "Reordering a tab",
-  addTabsToFolder: "Adding tabs to a folder",
-  removeTabsFromFolder: "Removing tabs from a folder",
-  createTabFolder: "Creating a tab folder",
-  addTabsToEssentials: "Adding tabs to Essentials",
-  removeTabsFromEssentials: "Removing tabs from Essentials",
-  getPageTextContent: "Reading page content",
-  getHTMLContent: "Reading page source code",
-  clickElement: "Clicking an element",
-  fillForm: "Filling a form",
-  getYoutubeTranscript: "Getting YouTube transcript",
-  getYoutubeDescription: "Getting YouTube description",
-  getYoutubeComments: "Getting YouTube comments",
-  searchBookmarks: "Searching bookmarks",
-  getAllBookmarks: "Reading bookmarks",
-  createBookmark: "Creating a bookmark",
-  addBookmarkFolder: "Creating a bookmark folder",
-  updateBookmark: "Updating a bookmark",
-  deleteBookmark: "Deleting a bookmark",
-  getAllWorkspaces: "Reading workspaces",
-  createWorkspace: "Creating a workspace",
-  updateWorkspace: "Updating a workspace",
-  deleteWorkspace: "Deleting a workspace",
-  moveTabsToWorkspace: "Moving tabs to a workspace",
-  reorderWorkspace: "Reordering a workspace",
-  showToast: "Showing a notification"
-}, tabsInstructions = "If you open tab in glace it will create new small popup window to show the tab, vsplit and hsplit means it will open new tab in vertical and horizontal split with current tab respectively.", toolGroups = {
+var toolVerbs = {
+  search: ["Searching the web", "Searched the web"],
+  openLink: ["Opening a link", "Opened link"],
+  newSplit: ["Creating a split view", "Created split view"],
+  splitExistingTabs: ["Splitting existing tabs", "Split tabs"],
+  getAllTabs: ["Reading tabs", "Read tabs"],
+  searchTabs: ["Searching tabs", "Searched tabs"],
+  closeTabs: ["Closing tabs", "Closed tabs"],
+  reorderTab: ["Reordering a tab", "Reordered tab"],
+  addTabsToFolder: ["Adding tabs to a folder", "Added tabs to folder"],
+  removeTabsFromFolder: ["Removing tabs from a folder", "Removed tabs from folder"],
+  createTabFolder: ["Creating a tab folder", "Created tab folder"],
+  deleteTabFolder: ["Deleting a tab folder", "Deleted folder"],
+  addTabsToEssentials: ["Adding tabs to Essentials", "Added to Essentials"],
+  removeTabsFromEssentials: ["Removing tabs from Essentials", "Removed from Essentials"],
+  getPageTextContent: ["Reading page content", "Read page"],
+  getHTMLContent: ["Reading page source code", "Read page source"],
+  clickElement: ["Clicking an element", "Clicked element"],
+  fillForm: ["Filling a form", "Filled form"],
+  getYoutubeTranscript: ["Getting YouTube transcript", "Got transcript"],
+  getYoutubeDescription: ["Getting YouTube description", "Got description"],
+  searchBookmarks: ["Searching bookmarks", "Searched bookmarks"],
+  getAllBookmarks: ["Reading bookmarks", "Read bookmarks"],
+  createBookmark: ["Creating a bookmark", "Created bookmark"],
+  addBookmarkFolder: ["Creating a bookmark folder", "Created bookmark folder"],
+  updateBookmark: ["Updating a bookmark", "Updated bookmark"],
+  deleteBookmark: ["Deleting a bookmark", "Deleted bookmark"],
+  getAllWorkspaces: ["Reading workspaces", "Read workspaces"],
+  createWorkspace: ["Creating a workspace", "Created workspace"],
+  updateWorkspace: ["Updating a workspace", "Updated workspace"],
+  deleteWorkspace: ["Deleting a workspace", "Deleted workspace"],
+  moveTabsToWorkspace: ["Moving tabs to a workspace", "Moved tabs"],
+  reorderWorkspace: ["Reordering a workspace", "Reordered workspace"],
+  showToast: ["Showing a notification", "Showed notification"],
+  inspectChrome: ["Inspecting browser UI", "Inspected UI"],
+  applyPreviewCSS: ["Previewing CSS", "Previewed CSS"],
+  runChromeJS: ["Running browser script", "Ran script"],
+  listMods: ["Listing Sine mods", "Listed mods"],
+  readMod: ["Reading mod files", "Read mod"],
+  createMod: ["Creating a Sine mod", "Created mod"],
+  updateModFile: ["Editing mod files", "Edited mod"],
+  getPreviewState: ["Checking staged preview", "Checked preview"],
+  clearPreview: ["Clearing preview", "Cleared preview"]
+}, toolNameMapping = Object.fromEntries(Object.entries(toolVerbs).map(([name, [loading]]) => [name, loading])), tabsInstructions = "If you open tab in glace it will create new small popup window to show the tab, vsplit and hsplit means it will open new tab in vertical and horizontal split with current tab respectively.", toolGroups = {
   search: {
     moreInstructions: async () => {
       let searchEngines = await getVisibleEngines(), defaultEngine = await getDefaultEngine(), engineNames = searchEngines.map((e) => e.name).join(", "), defaultEngineName = defaultEngine.name;
@@ -1917,7 +6575,7 @@ var toolNameMapping = {
 ` + tabsInstructions;
     },
     tools: {
-      search: createTool("Performs a web search using a specified search engine and opens the results.", {
+      search: createTool2("Performs a web search using a specified search engine and opens the results.", {
         searchTerm: createStringParameter("The term to search for."),
         engineName: createStringParameter("The name of the search engine to use.", !0),
         where: createStringParameter("Where to open results. Options: 'current tab', 'new tab', 'new window', 'incognito', 'glance', 'vsplit', 'hsplit'. Default: 'new tab'.", !0)
@@ -1933,15 +6591,15 @@ Note: Only second search is open in split (vertial by default), this will make i
   navigation: {
     moreInstructions: tabsInstructions + "While opening tab make sure it has valid URL.",
     tools: {
-      openLink: createTool("Opens a given URL in a specified location. Can also create a split view with the current tab.", {
+      openLink: createTool2("Opens a given URL in a specified location. Can also create a split view with the current tab.", {
         link: createStringParameter("The URL to open."),
         where: createStringParameter("Where to open the link. Options: 'current tab', 'new tab', 'background tab', 'new window', 'incognito', 'glance', 'vsplit', 'hsplit'. Default: 'new tab'.", !0)
       }, openLinkTool),
-      newSplit: createTool("Creates a split view by opening multiple new URLs in new tabs, then arranging them side-by-side.", {
+      newSplit: createTool2("Creates a split view by opening multiple new URLs in new tabs, then arranging them side-by-side.", {
         links: createStringArrayParameter("An array of URLs for the new tabs."),
         type: createStringParameter("The split type: 'vertical', 'horizontal', or 'grid'. Defaults to 'vertical'.", !0)
       }, newSplit),
-      splitExistingTabs: createTool("Creates a split view from existing open tabs.", {
+      splitExistingTabs: createTool2("Creates a split view from existing open tabs.", {
         tabIds: createStringArrayParameter("An array of tab session IDs to split."),
         type: createStringParameter("The split type: 'vertical', 'horizontal', or 'grid'. Defaults to 'vertical'.", !0)
       }, splitExistingTabs)
@@ -1969,27 +6627,35 @@ Note: Only second search is open in split (vertial by default), this will make i
 The tool getAllTabs is super super useful, tool you can use it in multiple case for tab/workspace management. Don't ask conformative questions to user like when user's input is clear. Like when user asks you to close tabs don't ask them "Do you really want to close those tabs ... ".
 More importantly, please don't use IDs of folder/tabs/workspace while talking to user, refere them by name not id. User might not know the ids of tabs.
 **Never** mention tabId or groupId with the user. Don't ask for Id if you need Id to filfill user's request you have to read it yourself.
+Tab IDs are short numeric strings valid for this session only: always call getAllTabs or searchTabs first and copy the "id" values exactly. Never invent IDs, add prefixes like "tab-", use indexes, or pass URLs/names where an ID is expected. Folder operations need the folder "id" from getAllTabs (folders list) or createTabFolder's result, never the folder name.
+Tabs placed in a folder are automatically pinned; that is expected, not something to undo.
+Batch independent work into single calls: close/move/group many tabs with one call's tabIds array, create several folders with one createTabFolder names array, delete several folders with one deleteTabFolder folderIds array.
 `,
     tools: {
-      getAllTabs: createTool("Retrieves all open tabs. Also provides more information about tabs like id, title, url, isCurrent, inCurrentWorkspace, workspace, workspaceName, workspaceIcon, pinned, isGroup, isEssential, parentFolderId, parentFolderName, isSplitView, splitViewId.", {}, getAllTabs),
-      searchTabs: createTool("Searches open tabs by title or URL. Similar to `getAllTabs` this will also provide more information about tab.", { query: createStringParameter("The search term for tabs.") }, searchTabs),
-      closeTabs: createTool("Closes one or more tabs.", { tabIds: createStringArrayParameter("An array of tab session IDs to close.") }, closeTabs),
-      reorderTab: createTool("Reorders a tab to a new index.", {
+      getAllTabs: createTool2("Retrieves all open tabs plus all tab folders (id, name, tabCount), including empty folders. Also provides more information about tabs like id, title, url, isCurrent, inCurrentWorkspace, workspace, workspaceName, workspaceIcon, pinned, isGroup, isEssential, parentFolderId, parentFolderName, isSplitView, splitViewId. Zen's own blank placeholder tabs are excluded.", {}, getAllTabs),
+      searchTabs: createTool2("Searches open tabs by title or URL. Similar to `getAllTabs` this will also provide more information about tab.", { query: createStringParameter("The search term for tabs.") }, searchTabs),
+      closeTabs: createTool2("Closes one or more tabs.", { tabIds: createStringArrayParameter("An array of tab session IDs to close.") }, closeTabs),
+      reorderTab: createTool2("Reorders a tab to a new index.", {
         tabId: createStringParameter("The session ID of the tab to reorder."),
-        newIndex: z.number().describe("The new index for the tab.")
+        newIndex: num("The new index for the tab.")
       }, reorderTab),
-      addTabsToFolder: createTool("Adds one or more tabs to a folder.", {
+      addTabsToFolder: createTool2("Adds one or more tabs to a folder.", {
         tabIds: createStringArrayParameter("The session IDs of the tabs to add."),
         folderId: createStringParameter("The ID of the folder to add the tabs to.")
       }, addTabsToFolder),
-      removeTabsFromFolder: createTool("Removes one or more tabs from their folder.", {
+      removeTabsFromFolder: createTool2("Removes one or more tabs from their folder.", {
         tabIds: createStringArrayParameter("The session IDs of the tabs to remove from their folder.")
       }, removeTabsFromFolder),
-      createTabFolder: createTool("Creates a new, empty tab folder.", {
-        name: createStringParameter("The name for the new folder.")
+      createTabFolder: createTool2("Creates new, empty tab folders. Pass names to create several at once.", {
+        name: createStringParameter("The name for the new folder.", !0),
+        names: createStringArrayParameter("Multiple folder names to create in one call. Either this or name is required.", !0)
       }, createTabFolder),
-      addTabsToEssentials: createTool("Adds one or more tabs to the essentials.", { tabIds: createStringArrayParameter("An array of session IDs to add to essentials.") }, addTabsToEssentials),
-      removeTabsFromEssentials: createTool("Removes one or more tabs from the essentials.", {
+      deleteTabFolder: createTool2("Deletes one or more tab folders by id. Tabs inside are kept open (ungrouped), never closed.", {
+        folderId: createStringParameter("The ID of the folder to delete.", !0),
+        folderIds: createStringArrayParameter("Multiple folder IDs to delete in one call. Either this or folderId is required.", !0)
+      }, deleteTabFolder),
+      addTabsToEssentials: createTool2("Adds one or more tabs to the essentials.", { tabIds: createStringArrayParameter("An array of session IDs to add to essentials.") }, addTabsToEssentials),
+      removeTabsFromEssentials: createTool2("Removes one or more tabs from the essentials.", {
         tabIds: createStringArrayParameter("An array of session IDs to remove from essentials.")
       }, removeTabsFromEssentials)
     },
@@ -2011,12 +6677,12 @@ More importantly, please don't use IDs of folder/tabs/workspace while talking to
   },
   pageInteraction: {
     tools: {
-      getPageTextContent: createTool("Retrieves the text content of the current web page to answer questions. Only use if the initial context is insufficient to answer user's question or fulfill user's command.", {}, messageManagerAPI.getPageTextContent.bind(messageManagerAPI)),
-      getHTMLContent: createTool("Retrieves the full HTML source of the current web page for detailed analysis. Use this tool very rarely, only when text content is insufficient.", {}, messageManagerAPI.getHTMLContent.bind(messageManagerAPI)),
-      clickElement: createTool("Clicks an element on the page.", {
+      getPageTextContent: createTool2("Retrieves the text content of the current web page to answer questions. Only use if the initial context is insufficient to answer user's question or fulfill user's command.", {}, messageManagerAPI.getPageTextContent.bind(messageManagerAPI)),
+      getHTMLContent: createTool2("Retrieves the full HTML source of the current web page for detailed analysis. Use this tool very rarely, only when text content is insufficient.", {}, messageManagerAPI.getHTMLContent.bind(messageManagerAPI)),
+      clickElement: createTool2("Clicks an element on the page.", {
         selector: createStringParameter("The CSS selector of the element to click.")
       }, clickElement),
-      fillForm: createTool("Fills a form input on the page.", {
+      fillForm: createTool2("Fills a form input on the page.", {
         selector: createStringParameter("The CSS selector of the input element to fill."),
         value: createStringParameter("The value to fill the input with.")
       }, fillForm)
@@ -2041,46 +6707,44 @@ Note: you must run tool getHTMLContent before clicking button or filling form to
   },
   youtube: {
     tools: {
-      getYoutubeTranscript: createTool("Retrieves the transcript of the current YouTube video. Only use if the current page is a YouTube video.", {}, messageManagerAPI.getYoutubeTranscript.bind(messageManagerAPI)),
-      getYoutubeDescription: createTool("Retrieves the description of the current YouTube video. Only use if the current page is a YouTube video.", {}, messageManagerAPI.getYoutubeDescription.bind(messageManagerAPI)),
-      getYoutubeComments: createTool("Retrieves top-level comments from the current YouTube video. Only use if the current page is a YouTube video.", {
-        count: z.number().optional().describe("The maximum number of comments to retrieve. Defaults to 10.")
-      }, getYoutubeComments)
+      getYoutubeTranscript: createTool2("Retrieves the transcript of the current YouTube video. Only use if the current page is a YouTube video; on any other page it fails fast with an error.", {}, getYoutubeTranscript),
+      getYoutubeDescription: createTool2("Retrieves the description of the current YouTube video. Only use if the current page is a YouTube video; on any other page it fails fast with an error.", {}, messageManagerAPI.getYoutubeDescription.bind(messageManagerAPI))
     },
     example: async () => `#### Getting YouTube Video Details:
 -   **User Prompt:** "Summarize this Youtube Video in 5 bullet points"
 -   **Your Tool Call:** \`{"functionCall": {"name": "getYoutubeTranscript"}}\`
 -   And you summarize the video as per user's requirements.
-
-#### Reading Youtube Comments:
--   **User Prompt:** "What are the user's feedback on this video"
--   **Your Tool Call:** \`{"functionCall": {"name": "getYoutubeComments", count: 20}}\`
--   And Based on comments you tell user about the user's feedback on video.
 `
   },
   bookmarks: {
     tools: {
-      searchBookmarks: createTool("Searches bookmarks based on a query.", {
+      searchBookmarks: createTool2("Searches bookmarks based on a query.", {
         query: createStringParameter("The search term for bookmarks.")
       }, searchBookmarks),
-      getAllBookmarks: createTool("Retrieves all bookmarks.", {}, getAllBookmarks),
-      createBookmark: createTool("Creates a new bookmark.", {
-        url: createStringParameter("The URL to bookmark."),
+      getAllBookmarks: createTool2("Retrieves all bookmarks.", {}, getAllBookmarks),
+      createBookmark: createTool2("Creates one bookmark, or many at once via bookmarks (preferred for multiples). Returns each bookmark's id so you can update or delete without searching.", {
+        url: createStringParameter("The URL to bookmark.", !0),
         title: createStringParameter("The title for the bookmark.", !0),
-        parentID: createStringParameter("The GUID of the parent folder.", !0)
+        parentID: createStringParameter("The GUID of the parent folder.", !0),
+        bookmarks: arrOf(obj({
+          url: str("The URL to bookmark."),
+          title: str("The title for the bookmark.", !0),
+          parentID: str("The GUID of the parent folder.", !0)
+        }), "Multiple bookmarks to create in one call. Either this or url is required.", !0)
       }, createBookmark),
-      addBookmarkFolder: createTool("Creates a new bookmark folder.", {
+      addBookmarkFolder: createTool2("Creates a new bookmark folder.", {
         title: createStringParameter("The title for the new folder."),
         parentID: createStringParameter("The GUID of the parent folder.", !0)
       }, addBookmarkFolder),
-      updateBookmark: createTool("Updates an existing bookmark.", {
+      updateBookmark: createTool2("Updates an existing bookmark.", {
         id: createStringParameter("The GUID of the bookmark to update."),
         url: createStringParameter("The new URL for the bookmark.", !0),
         title: createStringParameter("The new title for the bookmark.", !0),
         parentID: createStringParameter("The GUID of the parent folder.", !0)
       }, updateBookmark),
-      deleteBookmark: createTool("Deletes a bookmark.", {
-        id: createStringParameter("The GUID of the bookmark to delete.")
+      deleteBookmark: createTool2("Deletes one bookmark by id, or many at once via ids.", {
+        id: createStringParameter("The GUID of the bookmark to delete.", !0),
+        ids: createStringArrayParameter("Multiple bookmark GUIDs to delete in one call. Either this or id is required.", !0)
       }, deleteBookmark)
     },
     example: async () => `#### Finding and Editing a bookmark by folder name:
@@ -2088,7 +6752,13 @@ Note: you must run tool getHTMLContent before clicking button or filling form to
 -   **Your First Tool Call:** \`{"functionCall": {"name": "searchBookmarks", "args": {"query": "Example"}}}\`
 -   **Your Second Tool Call:** \`{"functionCall": {"name": "searchBookmarks", "args": {"query": "MyFolder"}}}\`
 -   **Your Third Tool Call (after receiving the bookmark and folder ids):** \`{"functionCall": {"name": "updateBookmark", "args": {"id": "xxxxxxxxxxxx", "parentID": "yyyyyyyyyyyy"}}}\`
-Note that first and second tool clls can be made in parallel, but the third tool call needs output from the first and second tool calls so it must be made after first and second.`
+Note that first and second tool clls can be made in parallel, but the third tool call needs output from the first and second tool calls so it must be made after first and second.
+
+#### Saving several bookmarks at once:
+-   **User Prompt:** "Bookmark these three pages in folder 'Reading'"
+-   **Your First Tool Call:** \`{"functionCall": {"name": "addBookmarkFolder", "args": {"title": "Reading"}}}\`
+-   **Your Second Tool Call (after getting the folder id):** \`{"functionCall": {"name": "createBookmark", "args": {"bookmarks": [{"url": "https://a.com", "title": "A", "parentID": "zzzzzzzzzzzz"}, {"url": "https://b.com", "title": "B", "parentID": "zzzzzzzzzzzz"}, {"url": "https://c.com", "title": "C", "parentID": "zzzzzzzzzzzz"}]}}}\`
+Note: one createBookmark call with the bookmarks array, not one call per bookmark. The result includes each bookmark's id for later update/delete.`
   },
   workspaces: {
     moreInstructions: `Zen browser has advanced tab management features and one of them is workspace.
@@ -2098,35 +6768,40 @@ If tab is essential which means does not belong to any specific workspace.
 **Never** mention worksapceId with the user. Don't ask for Id if you need Id to filfill user's request you have to read it yourself.
 `,
     tools: {
-      getAllWorkspaces: createTool("Retrieves all workspaces with id, name, icon, position and isActive.", {}, getAllWorkspaces),
-      createWorkspace: createTool("Creates a new workspace.", {
+      getAllWorkspaces: createTool2("Retrieves all workspaces with id, name, icon, position and isActive.", {}, getAllWorkspaces),
+      createWorkspace: createTool2("Creates a new workspace.", {
         name: createStringParameter("The name for the new workspace."),
         icon: createStringParameter("The icon (emoji or URL) for the new workspace.", !0)
       }, createWorkspace),
-      updateWorkspace: createTool("Updates an existing workspace (name and icon).", {
+      updateWorkspace: createTool2("Updates an existing workspace (name and icon).", {
         id: createStringParameter("The ID of the workspace to update."),
         name: createStringParameter("The new name for the workspace.", !0),
         icon: createStringParameter("The new icon for the workspace.", !0)
       }, updateWorkspace),
-      deleteWorkspace: createTool("Deletes a workspace.", { id: createStringParameter("The ID of the workspace to delete.") }, deleteWorkspace),
-      moveTabsToWorkspace: createTool("Moves tabs to a specified workspace.", {
+      deleteWorkspace: createTool2("Deletes a workspace.", { id: createStringParameter("The ID of the workspace to delete.") }, deleteWorkspace),
+      moveTabsToWorkspace: createTool2("Moves tabs to a specified workspace.", {
         tabIds: createStringArrayParameter("The session IDs of the tabs to move."),
         workspaceId: createStringParameter("The ID of the target workspace.")
       }, moveTabsToWorkspace),
-      reorderWorkspace: createTool("Reorders a workspace to a new position.", {
+      reorderWorkspace: createTool2("Reorders a workspace to a new position.", {
         id: createStringParameter("The ID of the workspace to reorder."),
-        newPosition: z.number().describe("The new zero-based index for the workspace.")
+        newPosition: num("The new zero-based index for the workspace.")
       }, reorderWorkspace)
     }
   },
   uiFeedback: {
     tools: {
-      showToast: createTool("Shows a temporary toast message to the user.", {
+      showToast: createTool2("Shows a temporary toast message to the user.", {
         title: createStringParameter("The main title of the toast message."),
         description: createStringParameter("Optional secondary text for the toast.", !0)
       }, showCustomToast)
     },
     example: async () => '#### Showing a Toast Notification:\n-   **User Prompt:** "let me know when the download is complete"\n-   **Your Tool Call (after a long-running task):** `{"functionCall": {"name": "showToast", "args": {"title": "Download Complete", "description": "The file has been saved to your downloads folder."}}}`'
+  },
+  build: {
+    moreInstructions: "Build tools act on the BROWSER CHROME (Firefox UI), not web content. inspectChrome and applyPreviewCSS never need permission; runChromeJS, createMod, and updateModFile (non-BrowseBot authors) ask first. Console output from runChromeJS is returned as the tool result.",
+    tools: buildTools,
+    example: async () => '#### Styling the browser UI:\n-   **User Prompt:** "make the browser UI look like cyberpunk"\n-   **Your First Tool Call:** `{"functionCall": {"name": "inspectChrome", "args": {}}}`\n-   **Your Second Tool Call:** `{"functionCall": {"name": "applyPreviewCSS", "args": {"css": ":root { --zen-primary-color: #00fff9 !important; }"}}}`\n-   Then verify with `inspectChrome` and end with: "Do you want to turn this into a mod?"\n\n#### Creating a mod when asked:\n-   **User Prompt:** "turn this into a mod called Neon Tabs"\n-   **Your Tool Call:** `{"functionCall": {"name": "createMod", "args": {"name": "Neon Tabs", "description": "Neon cyberpunk tab styling"}}}`'
   },
   misc: {
     example: async (activeGroups) => {
@@ -2144,50 +6819,42 @@ If tab is essential which means does not belong to any specific workspace.
 -   **Your Second Tool Call:**(based on all tabs) \`{"functionCall": {"name": "createTabFolder", "args": {"name": "..."}}}\`
 -   **Your Third Tool Call (based on all tabs):** \`{"functionCall": {"name": "addTabsToFolder", "args": {"tabIds": ["x", "y", ...] }}}\`
 -   **Your Fourth Tool Call (based on all tabs):** \`{"functionCall": {"name": "moveTabsToWorkspace", "args": {"tabIds": ["x", "y", ...], "workspaceId": "e1f2a3b4-c5d6..."}}}\`
--   Go on keep making tool calls until tabs are managed (note here you should not ask any question to user for conformation).
+-   Go on keep making tool calls until tabs are managed (note here you should not ask any question to user for confirmation).
 
 `;
       return example;
     }
   }
 }, getTools = (groups, { shouldToolBeCalled, afterToolCall } = {}) => {
-  let selectedTools = (() => {
-    if (!groups || !Array.isArray(groups) || groups.length === 0)
-      return Object.entries(toolGroups).reduce((acc, [name, group]) => {
-        if (name !== "misc" && group.tools)
-          return { ...acc, ...group.tools };
-        return acc;
-      }, {});
-    return groups.reduce((acc, groupName) => {
-      if (toolGroups[groupName] && toolGroups[groupName].tools)
-        return { ...acc, ...toolGroups[groupName].tools };
-      return acc;
-    }, {});
-  })();
+  let selectedTools = groups.reduce((acc, groupName) => {
+    if (toolGroups[groupName] && toolGroups[groupName].tools)
+      return { ...acc, ...toolGroups[groupName].tools };
+    return acc;
+  }, {});
   if (!shouldToolBeCalled && !afterToolCall)
     return selectedTools;
   let wrappedTools = {};
   for (let toolName in selectedTools) {
     let originalTool = selectedTools[toolName], newTool = { ...originalTool }, originalExecute = originalTool.execute;
-    newTool.execute = async (args) => {
-      if (shouldToolBeCalled && !await shouldToolBeCalled(toolName))
+    newTool.execute = async (args, opts) => {
+      if (shouldToolBeCalled && !await shouldToolBeCalled(toolName, args))
         return PREFS2.debugLog(`Tool execution for '${toolName}' was denied by shouldToolBeCalled.`), { error: `Tool execution for '${toolName}' was denied by user.` };
-      let result = await originalExecute(args);
+      let result = await originalExecute(args, opts);
       if (afterToolCall)
-        afterToolCall(toolName, result);
+        afterToolCall(toolName, result, args);
       return result;
     }, wrappedTools[toolName] = newTool;
   }
   return wrappedTools;
 }, getToolSystemPrompt = async (groups, includeExamples = !0) => {
   try {
-    let activeGroupNames = groups && Array.isArray(groups) && groups.length > 0 ? groups : Object.keys(toolGroups).filter((g) => g !== "misc"), activeGroups = new Set(activeGroupNames), availableTools = [], toolExamples = [];
+    let activeGroupNames = groups, activeGroups = new Set(activeGroupNames), availableTools = [], toolExamples = [];
     for (let groupName of activeGroupNames) {
       let group = toolGroups[groupName];
       if (group) {
         if (group.tools)
           for (let toolName in group.tools) {
-            let tool = group.tools[toolName], params = Object.keys(tool.inputSchema.shape).join(", ");
+            let tool = group.tools[toolName], params = paramNames(tool.parameters).join(", ");
             availableTools.push(`- \`${toolName}(${params})\`: ${tool.description}`);
           }
         if (group.moreInstructions) {
@@ -2203,6 +6870,8 @@ If tab is essential which means does not belong to any specific workspace.
       if (miscExample)
         toolExamples.push(miscExample);
     }
+    if (activeGroups.has("tabs") && activeGroups.has("bookmarks"))
+      availableTools.push('Tab folders and bookmark folders are unrelated systems with unrelated ids. When the user says "folder" without saying "bookmark", they always mean a tab folder: use createTabFolder, deleteTabFolder, addTabsToFolder, removeTabsFromFolder. Only use the bookmark tools when the user says "bookmark".');
     let systemPrompt = `
 ## Available Tools:
 ${availableTools.join(`
@@ -2223,1668 +6892,30 @@ ${toolExamples.join(`
   }
 };
 
-// findbar-ai/findbar-ai.uc.js
-var icons = {
-  loading: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--browse-bot-muted)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
-  success: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--browse-bot-success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-  error: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--browse-bot-error)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
-  declined: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--browse-bot-warning)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>'
-}, getSidebarWidth = () => {
-  if (gZenCompactModeManager && (!gZenCompactModeManager?.preference || !PREFS2.getPref("zen.view.compact.hide-tabbar")) && !gZenCompactModeManager.sidebarIsOnRight)
-    return gZenCompactModeManager.getAndApplySidebarWidth();
-  else
-    return 0;
-};
-function updateSidebarWidth() {
-  if (!PREFS2.pseudoBg)
-    return;
-  let mainWindow = document.getElementById("main-window"), width = getSidebarWidth();
-  if (width)
-    mainWindow.style.setProperty("--zen-sidebar-width", width + "px");
-  setTimeout(() => browseBotFindbar._updateFindbarDimensions(), 2);
-}
-var sidebarWidthUpdate = function() {
-  let mainWindow = document.getElementById("main-window"), attributes = ["zen-compact-mode", "zen-sidebar-expanded", "zen-right-side"];
-  new MutationObserver((mutationsList) => {
-    if (!PREFS2.pseudoBg)
-      return;
-    for (let mutation of mutationsList)
-      if (mutation.type === "attributes" && attributes.includes(mutation.attributeName))
-        updateSidebarWidth();
-  }).observe(mainWindow, {
-    attributes: !0,
-    attributeFilter: attributes
-  }), updateSidebarWidth();
-};
-sidebarWidthUpdate();
-function parseMD(markdown, convertHTML = !0) {
-  let htmlContent = parseElement('<div class="markdown-body"></div>');
-  try {
-    let parse = ChromeUtils.importESModule("chrome://userscripts/content/utils/dom.mjs").default.parseMD, browserWindow = Services.wm.getMostRecentWindow("navigator:browser");
-    parse(htmlContent, markdown, "", browserWindow || window);
-  } catch {
-    PREFS2.debugLog("Parsing markdown failed"), htmlContent.innerHTML = markdown;
-  }
-  if (convertHTML)
-    return htmlContent;
-  else
-    return htmlContent.innerHTML.replace(/<(img|hr|br|input)([^>]*?)(?<!\/)>/gi, "<$1$2 />");
-}
-PREFS2.setInitialPrefs();
-var browseBotFindbar = {
-  findbar: null,
-  expandButton: null,
-  chatContainer: null,
-  apiKeyContainer: null,
-  _updateFindbar: null,
-  _addKeymaps: null,
-  _handleInputKeyPress: null,
-  _handleFindFieldInput: null,
-  _handleFindbarOpenEvent: null,
-  _handleFindbarCloseEvent: null,
-  _isExpanded: !1,
-  _updateContextMenuText: null,
-  _agenticModeListener: null,
-  _backgroundStylesListener: null,
-  _citationsListener: null,
-  _contextMenuEnabledListener: null,
-  _persistListener: null,
-  _minimalListener: null,
-  _dndListener: null,
-  contextMenuItem: null,
-  _matchesObserver: null,
-  _isDragging: !1,
-  _startDrag: null,
-  _stopDrag: null,
-  _handleDrag: null,
-  _initialContainerCoor: { x: null, y: null },
-  _initialMouseCoor: { x: null, y: null },
-  _startWidth: null,
-  _resizeHandle: null,
-  _isResizing: !1,
-  _startResize: null,
-  _stopResize: null,
-  _handleResize: null,
-  _handleResizeEnd: null,
-  _toolConfirmationDialog: null,
-  _highlightTimeout: null,
-  _originalOnMatchesCountResult: null,
-  _currentAIMessageDiv: null,
-  _updateFindbarDimensions() {
-    if (!this.findbar) {
-      document.documentElement.style.removeProperty("--findbar-width"), document.documentElement.style.removeProperty("--findbar-height"), document.documentElement.style.removeProperty("--findbar-x"), document.documentElement.style.removeProperty("--findbar-y");
-      return;
-    }
-    let rect = this.findbar.getBoundingClientRect(), _findbarDimension = { width: rect.width, height: rect.height }, _findbarCoors = { x: rect.left, y: rect.top };
-    document.documentElement.style.setProperty("--findbar-width", `${_findbarDimension.width}px`), document.documentElement.style.setProperty("--findbar-height", `${_findbarDimension.height}px`), document.documentElement.style.setProperty("--findbar-x", `${_findbarCoors.x}px`), document.documentElement.style.setProperty("--findbar-y", `${_findbarCoors.y}px`);
-  },
-  _saveFindbarDimensions() {
-    if (!this.findbar || !PREFS2.rememberDimensions)
-      return;
-    let rect = this.findbar.getBoundingClientRect();
-    PREFS2.width = rect.width;
-  },
-  _applyFindbarDimensions() {
-    if (!this.findbar || !PREFS2.rememberDimensions)
-      return;
-    let width = PREFS2.width;
-    if (width)
-      this.findbar.style.width = `${width}px`;
-  },
-  _isStreaming: !1,
-  _abortController: null,
-  get expanded() {
-    return this._isExpanded;
-  },
-  set expanded(value) {
-    let isChanged = value !== this._isExpanded;
-    if (this._isExpanded = value, !this.findbar)
-      return;
-    if (this.findbar.expanded = value, isChanged)
-      setTimeout(() => this._updateFindbarDimensions(), 2), setTimeout(() => this._updateFindbarDimensions(), 20);
-    if (value) {
-      if (this.findbar.classList.add("ai-expanded"), this.show(), this.showAIInterface(), isChanged)
-        this.focusPrompt();
-      let messagesContainer = this?.chatContainer?.querySelector("#chat-messages");
-      if (messagesContainer)
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    } else {
-      if (this._isStreaming)
-        this._abortController?.abort();
-      if (this.findbar.classList.remove("ai-expanded"), this.removeAIInterface(), isChanged && !this.minimal)
-        this.focusInput();
-    }
-  },
-  get enabled() {
-    return PREFS2.enabled;
-  },
-  set enabled(value) {
-    if (typeof value === "boolean")
-      PREFS2.enabled = value;
-  },
-  handleEnabledChange(enabled) {
-    if (enabled.value)
-      this.init();
-    else
-      this.destroy();
-  },
-  get minimal() {
-    return PREFS2.minimal;
-  },
-  set minimal(value) {
-    if (typeof value === "boolean")
-      PREFS2.minimal = value;
-  },
-  handleMinimalPrefChange: function() {
-    this.removeExpandButton(), this.addExpandButton(), this.removeAIInterface(), this.showAIInterface();
-  },
-  createToolConfirmationDialog(toolNames) {
-    return new Promise((resolve) => {
-      let dialog = parseElement(`
-        <div class="tool-confirmation-dialog">
-          <div class="tool-confirmation-content">
-            <p>Allow AI to do following tasks: ${toolNames?.join(", ")}?</p>
-            <div class="buttons">
-              <button class="not-again">Don't ask again</button>
-              <div class="right-side-buttons">
-                <button class="confirm-tool">Yes</button>
-                <button class="cancel-tool">No</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `);
-      this._toolConfirmationDialog = dialog;
-      let removeDilog = () => {
-        dialog.remove(), this._toolConfirmationDialog = null;
-      };
-      dialog.querySelector(".confirm-tool").addEventListener("click", () => {
-        removeDilog(), resolve(!0);
-      }), dialog.querySelector(".cancel-tool").addEventListener("click", () => {
-        removeDilog(), resolve(!1);
-      }), dialog.querySelector(".not-again").addEventListener("click", () => {
-        removeDilog(), PREFS2.conformation = !1, resolve(!0);
-      }), document.body.appendChild(dialog);
-    });
-  },
-  updateFindbar() {
-    if (SettingsModal.hide(), this.removeExpandButton(), this.removeAIInterface(), this.disableResize(), !PREFS2.persistChat)
-      this.hide(), this.expanded = !1, this.clear();
-    gBrowser.getFindBar().then((findbar) => {
-      if (this.findbar = findbar, this._applyFindbarDimensions(), this.addExpandButton(), PREFS2.persistChat) {
-        if (this?.findbar?.history) {
-          if (browseBotFindbarLLM.history = this.findbar.history, this?.findbar?.aiStatus && JSON.stringify(this.aiStatus) !== JSON.stringify(this.findbar.aiStatus))
-            browseBotFindbarLLM.history = [], this.findbar.history = [];
-        } else
-          browseBotFindbarLLM.history = [];
-        if (this?.findbar?.expanded && !this?.findbar?.hidden)
-          setTimeout(() => this.expanded = !0, 200);
-        else
-          this.hide(), this.expanded = !1;
-      } else
-        this.hide(), this.expanded = !1;
-      this.updateFindbarStatus(), setTimeout(() => {
-        if (PREFS2.dndEnabled)
-          this.enableResize();
-        this._updateFindbarDimensions();
-      }, 0);
-      let matches = this.findbar.querySelector(".found-matches"), status = this.findbar.querySelector(".findbar-find-status"), wrapper = this.findbar.querySelector('hbox[anonid="findbar-textbox-wrapper"]');
-      if (wrapper) {
-        if (matches && matches.parentElement !== wrapper)
-          wrapper.appendChild(matches);
-        if (status && status.parentElement !== wrapper)
-          wrapper.appendChild(status);
-      }
-      this.findbar._findField.removeEventListener("keypress", this._handleInputKeyPress), this.findbar._findField.addEventListener("keypress", this._handleInputKeyPress), this.findbar._findField.removeEventListener("input", this._handleFindFieldInput), this.findbar._findField.addEventListener("input", this._handleFindFieldInput);
-    });
-  },
-  highlight(word) {
-    if (!this.findbar)
-      return;
-    if (this._highlightTimeout)
-      clearTimeout(this._highlightTimeout);
-    this.findbar._find(word), this._highlightTimeout = setTimeout(() => {
-      this.findbar.browser.finder.highlight(!1), this._highlightTimeout = null;
-    }, 2000);
-  },
-  show() {
-    if (!this.findbar)
-      return !1;
-    return this.findbar.open(), this.focusInput(), setTimeout(() => this._updateFindbarDimensions(), 0), !0;
-  },
-  hide() {
-    if (!this.findbar)
-      return !1;
-    return this.findbar.close(), this.findbar.toggleHighlight(!1), setTimeout(() => this._updateFindbarDimensions(), 0), !0;
-  },
-  toggleVisibility() {
-    if (!this.findbar)
-      return;
-    if (this.findbar.hidden)
-      this.show();
-    else
-      this.hide();
-  },
-  clear() {
-    if (browseBotFindbarLLM.clearData(), this.findbar)
-      this.findbar.history = null;
-    let messages = this?.chatContainer?.querySelector("#chat-messages");
-    if (messages)
-      messages.innerHTML = "";
-    setTimeout(() => this._updateFindbarDimensions(), 1);
-  },
-  aiStatus: {
-    citationsEnabled: PREFS2.citationsEnabled,
-    agenticMode: PREFS2.agenticMode
-  },
-  updateFindbarStatus() {
-    if (this.aiStatus = {
-      agenticMode: PREFS2.agenticMode,
-      citationsEnabled: PREFS2.citationsEnabled
-    }, this.findbar)
-      this.findbar.aiStatus = this.aiStatus;
-  },
-  createAPIKeyInterface() {
-    let currentProviderName = browseBotFindbarLLM.currentProvider.name, menuItems = Object.entries(browseBotFindbarLLM.AVAILABLE_PROVIDERS).map(([name, provider]) => `
-                  <menuitem
-                    value="${name}"
-                    label="${escapeXmlAttribute(provider.label)}"
-                    ${name === currentProviderName ? 'selected="true"' : ""}
-                    ${provider.faviconUrl ? `image="${escapeXmlAttribute(provider.faviconUrl)}"` : ""}
-                  />
-                `).join(""), menulistXul = `
-        <menulist id="provider-selector" class="provider-selector" value="${currentProviderName}">
-          <menupopup>
-            ${menuItems}
-          </menupopup>
-        </menulist>`, providerSelectorXulElement = parseElement(menulistXul, "xul"), html = `
-        <div class="browse-bot-setup">
-          <div class="ai-setup-content">
-            <h3>AI Setup Required</h3>
-            <p>To use AI features, you need to set up your API key and select a provider.</p>
-            <div class="provider-selection-group">
-              <label for="provider-selector">Select Provider:</label>
-            </div>
-            <div class="api-key-input-group">
-              <input type="text" id="base-url" class="api-input" placeholder="Enter API Endpoint (e.g. https://api.your-provider.com/v1)" />
-              <input type="text" id="model-name" class="api-input" placeholder="Enter Model Name (e.g. deepseek-chat)" />
-              <div class="api-key-row">
-                <input type="password" id="api-key" placeholder="Enter your API key" />
-                <button id="save-api-key">Save</button>
-              </div>
-            </div>
-            <div class="api-key-links">
-              <button id="get-api-key-link">Get API Key</button>
-            </div>
-          </div>
-        </div>`, container = parseElement(`
-        <div class="browse-bot-setup">
-          <div class="ai-setup-content">
-            <h3>AI Setup Required</h3>
-            <p>To use AI features, you need to set up your API key and select a provider.</p>
-            <div class="provider-selection-group">
-              <label for="provider-selector">Select Provider:</label>
-            </div>
-            <div class="api-key-input-group">
-              <input type="text" id="base-url" class="api-input" placeholder="Enter API Endpoint (e.g. https://api.your-provider.com/v1)" />
-              <input type="text" id="model-name" class="api-input" placeholder="Enter Model Name (e.g. deepseek-chat)" />
-              <div class="api-key-row">
-                <input type="password" id="api-key" placeholder="Enter your API key" />
-                <button id="save-api-key">Save</button>
-              </div>
-            </div>
-            <div class="api-key-links">
-              <button id="get-api-key-link">Get API Key</button>
-            </div>
-          </div>
-        </div>`);
-    container.querySelector(".provider-selection-group").appendChild(providerSelectorXulElement);
-    let providerSelector = container.querySelector("#provider-selector"), input = container.querySelector("#api-key"), saveBtn = container.querySelector("#save-api-key"), getApiKeyLink = container.querySelector("#get-api-key-link"), description = container.querySelector(".ai-setup-content").querySelector("p"), updateUIForProvider = (providerName) => {
-      let provider = browseBotFindbarLLM.AVAILABLE_PROVIDERS[providerName], baseUrlInput = container.querySelector("#base-url"), modelNameInput = container.querySelector("#model-name"), apiKeyRow = container.querySelector(".api-key-row");
-      if (providerName === "ollama") {
-        if (description.textContent = "Ollama is selected. Configure the Base URL and Model name below.", baseUrlInput?.classList.remove("hidden"), modelNameInput?.classList.remove("hidden"), apiKeyRow?.classList.add("hidden"), getApiKeyLink.style.display = "none", baseUrlInput)
-          baseUrlInput.value = PREFS2.ollamaBaseUrl || "";
-        if (modelNameInput)
-          modelNameInput.value = PREFS2.getPref(PREFS2.OLLAMA_MODEL) || "";
-      } else if (providerName === "custom") {
-        if (description.textContent = "Custom Provider is selected. Please enter the API Endpoint, Model name, and your API Key.", baseUrlInput?.classList.remove("hidden"), modelNameInput?.classList.remove("hidden"), apiKeyRow?.classList.remove("hidden"), getApiKeyLink.style.display = "none", baseUrlInput)
-          baseUrlInput.value = PREFS2.getPref(PREFS2.CUSTOM_BASE_URL) || "";
-        if (modelNameInput)
-          modelNameInput.value = PREFS2.getPref(PREFS2.CUSTOM_MODEL) || "";
-        input.value = PREFS2.getPref(PREFS2.CUSTOM_API_KEY) || "";
-      } else
-        description.textContent = "To use AI features, you need to set up your API key and select a provider.", baseUrlInput?.classList.add("hidden"), modelNameInput?.classList.add("hidden"), apiKeyRow?.classList.remove("hidden"), input.value = provider.apiKey || "", getApiKeyLink.style.display = provider.apiKeyUrl ? "inline-block" : "none", getApiKeyLink.disabled = !provider.apiKeyUrl, getApiKeyLink.title = provider.apiKeyUrl ? "Get API Key" : "No API key link available for this provider.";
-    };
-    return updateUIForProvider(currentProviderName), providerSelector.addEventListener("command", (e) => {
-      let selectedProviderName = e.target.value;
-      browseBotFindbarLLM.setProvider(selectedProviderName), updateUIForProvider(selectedProviderName);
-    }), getApiKeyLink.addEventListener("click", () => {
-      openTrustedLinkIn(browseBotFindbarLLM.currentProvider.apiKeyUrl, "tab");
-    }), saveBtn.addEventListener("click", () => {
-      let providerName = browseBotFindbarLLM.currentProvider.name, baseUrlInput = container.querySelector("#base-url"), modelNameInput = container.querySelector("#model-name");
-      if (providerName === "ollama") {
-        let baseUrl = baseUrlInput ? baseUrlInput.value.trim() : "", model = modelNameInput ? modelNameInput.value.trim() : "";
-        if (baseUrl)
-          PREFS2.ollamaBaseUrl = baseUrl;
-        if (model)
-          PREFS2.setPref(PREFS2.OLLAMA_MODEL, model);
-        this.showAIInterface();
-      } else if (providerName === "custom") {
-        let endpoint = baseUrlInput ? baseUrlInput.value.trim() : "", model = modelNameInput ? modelNameInput.value.trim() : "", value = input.value.trim();
-        if (endpoint)
-          PREFS2.setPref(PREFS2.CUSTOM_BASE_URL, endpoint);
-        if (model)
-          PREFS2.setPref(PREFS2.CUSTOM_MODEL, model);
-        if (value)
-          PREFS2.setPref(PREFS2.CUSTOM_API_KEY, value);
-        this.showAIInterface();
-      } else if (input.value.trim())
-        browseBotFindbarLLM.currentProvider.apiKey = input.value.trim(), this.showAIInterface();
-    }), [input, container.querySelector("#base-url"), container.querySelector("#model-name")].forEach((el) => {
-      el?.addEventListener("keypress", (e) => {
-        if (e.key === "Enter")
-          saveBtn.click();
-      });
-    }), container;
-  },
-  _removeToolCallUI() {
-    if (!this._currentAIMessageDiv)
-      return;
-    let container = this._currentAIMessageDiv.querySelector(".tool-calls-container");
-    if (container)
-      container.remove(), setTimeout(() => this._updateFindbarDimensions(), 0);
-  },
-  _createOrUpdateToolCallUI(toolName, status, errorMsg = null) {
-    let messageDiv = this._currentAIMessageDiv;
-    if (!messageDiv)
-      return;
-    let container = messageDiv.querySelector(".tool-calls-container"), messageContent = messageDiv.querySelector(".message-content");
-    if (!container)
-      if (container = parseElement('<div class="tool-calls-container"></div>'), messageContent)
-        messageDiv.insertBefore(container, messageContent);
-      else
-        messageDiv.appendChild(container);
-    let friendlyName = toolNameMapping[toolName] || toolName;
-    container.querySelectorAll('.tool-call-status[data-status="loading"]').forEach((item) => item.remove());
-    let toolDiv = parseElement(`
-<div class="tool-call-status" data-tool-name="${toolName}" data-status="${status}">
-  <span class="tool-call-icon">${icons[status] || ""}</span>
-  <span class="tool-call-name">${friendlyName}</span>
-  ${status === "error" && errorMsg ? `<span class="tool-call-error">${escapeXmlAttribute(errorMsg)}</span>` : ""}
-  ${status === "declined" ? '<span class="tool-call-error">Declined by user</span>' : ""}
-</div>
-`);
-    container.appendChild(toolDiv);
-    let title = friendlyName;
-    if (status === "error" && errorMsg)
-      title += `
-Error: ${errorMsg}`;
-    else if (status === "declined")
-      title += `
-Declined by user.`;
-    toolDiv.setAttribute("tooltiptext", title), messageDiv.scrollTop = messageDiv.scrollHeight, setTimeout(() => this._updateFindbarDimensions(), 0);
-  },
-  async sendMessage(prompt) {
-    if (!prompt || this._isStreaming)
-      return;
-    this.show(), this.expanded = !0, this.addChatMessage({ role: "user", content: prompt });
-    let messagesContainer = this.chatContainer.querySelector("#chat-messages");
-    this._abortController = new AbortController, this._toggleStreamingControls(!0);
-    let aiMessageDiv = parseElement(`<div class="chat-message chat-message-ai">
-        <div class="message-content">
-          <div class="markdown-body"></div>
-        </div>
-      </div>`), contentDiv = aiMessageDiv.querySelector(".markdown-body");
-    if (messagesContainer)
-      messagesContainer.appendChild(aiMessageDiv), messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    this._currentAIMessageDiv = aiMessageDiv;
-    try {
-      let resultPromise = browseBotFindbarLLM.sendMessage(prompt, this._abortController.signal);
-      if (PREFS2.citationsEnabled || !PREFS2.streamEnabled) {
-        let loadingIndicator = this.createLoadingIndicator();
-        messagesContainer.appendChild(loadingIndicator), messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        try {
-          let result = await resultPromise;
-          if (loadingIndicator.parentNode)
-            loadingIndicator.remove();
-          if (PREFS2.citationsEnabled) {
-            let { answer, citations } = result;
-            if (citations && citations.length > 0)
-              aiMessageDiv.dataset.citations = JSON.stringify(citations);
-            let textToParse = answer.replace(/\[(\d+)\]/g, '<span class="citation-link" data-citation-id="$1">[$1]</span>');
-            contentDiv.appendChild(parseMD(textToParse));
-          } else if (result.text.trim() === "" && aiMessageDiv.querySelector(".tool-calls-container"))
-            contentDiv.innerHTML = parseMD("*(Tool actions performed)*", !1);
-          else if (result.text.trim() === "" && !aiMessageDiv.querySelector(".tool-calls-container"))
-            aiMessageDiv.remove();
-          else
-            contentDiv.appendChild(parseMD(result.text));
-        } finally {
-          if (loadingIndicator.parentNode)
-            loadingIndicator.remove();
-          messagesContainer.scrollTop = messagesContainer.scrollHeight, setTimeout(() => this._updateFindbarDimensions(), 0);
-        }
-      } else {
-        let result = await resultPromise, fullText = "";
-        for await (let delta of result.textStream) {
-          fullText += delta;
-          try {
-            contentDiv.innerHTML = parseMD(fullText, !1);
-          } catch (e) {
-            PREFS2.debugError("innerHTML assignment failed:", e.message), contentDiv.textContent = fullText + `
-
-[Error rendering markdown]`;
-          }
-          if (setTimeout(() => this._updateFindbarDimensions(), 0), messagesContainer)
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-        if (fullText.trim() === "" && aiMessageDiv.querySelector(".tool-calls-container"))
-          contentDiv.innerHTML = parseMD("*(Tool actions performed)*", !1);
-        else if (fullText.trim() === "" && !aiMessageDiv.querySelector(".tool-calls-container"))
-          aiMessageDiv.remove();
-      }
-    } catch (e) {
-      if (e.name !== "AbortError") {
-        if (PREFS2.debugError("Error sending message:", e), aiMessageDiv)
-          aiMessageDiv.remove();
-        this.addChatMessage({ role: "error", content: `**Error**: ${e.message}` });
-      } else if (PREFS2.debugLog("Streaming aborted by user."), contentDiv && contentDiv.textContent.trim())
-        contentDiv.appendChild(parseMD("_Stopped_"));
-      else if (aiMessageDiv)
-        aiMessageDiv.remove();
-    } finally {
-      this._toggleStreamingControls(!1), this._abortController = null, this._removeToolCallUI(), this._currentAIMessageDiv = null;
-    }
-  },
-  _toggleStreamingControls(isStreaming) {
-    if (this._isStreaming = isStreaming, !this.chatContainer)
-      return;
-    let sendBtn = this.chatContainer.querySelector("#send-prompt"), stopBtn = this.chatContainer.querySelector("#stop-generation"), promptInput = this.chatContainer.querySelector("#ai-prompt");
-    if (isStreaming)
-      sendBtn.style.display = "none", stopBtn.style.display = "flex", promptInput.disabled = !0;
-    else
-      sendBtn.style.display = "flex", stopBtn.style.display = "none", promptInput.disabled = !1, this.focusPrompt();
-  },
-  _overrideFindbarMatchesDisplay(retry = 0) {
-    if (PREFS2.debugLog(`_overrideFindbarMatchesDisplay called, retry: ${retry}`), this._originalOnMatchesCountResult) {
-      PREFS2.debugLog("Prototype already overridden.");
-      return;
-    }
-    let findbarClass = customElements.get("findbar")?.prototype;
-    if (!findbarClass) {
-      if (PREFS2.debugLog("findbarClass not found."), retry < 10)
-        setTimeout(() => this._overrideFindbarMatchesDisplay(retry + 1), 100), PREFS2.debugLog(`Retrying _overrideFindbarMatchesDisplay in 100ms, retry: ${retry + 1}`);
-      else
-        PREFS2.debugError("Failed to override findbar matches display: findbar custom element not found after multiple retries.");
-      return;
-    }
-    PREFS2.debugLog("findbarClass found. Overriding onMatchesCountResult."), this._originalOnMatchesCountResult = findbarClass.onMatchesCountResult, findbarClass.onMatchesCountResult = function(result) {
-      if (!PREFS2.enabled)
-        return;
-      let foundMatchesElement = this._foundMatches;
-      if (typeof result?.current !== "number" || typeof result?.total !== "number")
-        return;
-      let next = this.querySelector(".findbar-find-next"), previous = this.querySelector(".findbar-find-previous");
-      if (next && previous)
-        if (result.searchString.trim() === "" || result.total <= 1)
-          next.disabled = !0, previous.disabled = !0;
-        else if (result.current <= 1)
-          next.disabled = !1, previous.disabled = !0;
-        else if (result.current >= result.total)
-          next.disabled = !0, previous.disabled = !1;
-        else
-          next.disabled = !1, previous.disabled = !1;
-      if (!foundMatchesElement)
-        return;
-      if (result.searchString.trim() === "") {
-        foundMatchesElement.setAttribute("value", "");
-        return;
-      }
-      foundMatchesElement.hidden = !1;
-      let newLabel = `${result.current}/${result.total}`;
-      foundMatchesElement.setAttribute("value", newLabel);
-    }, PREFS2.debugLog("onMatchesCountResult successfully overridden.");
-  },
-  _restoreFindbarMatchesDisplay() {
-    if (this._originalOnMatchesCountResult) {
-      let findbarClass = customElements.get("findbar")?.prototype;
-      if (findbarClass)
-        findbarClass.onMatchesCountResult = this._originalOnMatchesCountResult;
-      if (this._originalOnMatchesCountResult = null, this.findbar) {
-        let foundMatchesElement = this.findbar._foundMatches;
-        if (foundMatchesElement)
-          foundMatchesElement.setAttribute("value", ""), foundMatchesElement.hidden = !0;
-      }
-    }
-  },
-  createChatInterface() {
-    let container = parseElement(`
-        <div class="browse-bot-chat">
-          <div class="ai-chat-header">
-            <div class="findbar-drag-handle"></div>
-          </div>
-          <div class="ai-chat-messages" id="chat-messages"></div>
-          <div class="ai-chat-input-group">
-          <textarea id="ai-prompt" placeholder="Ask AI anything..." rows="2"></textarea>
-          <button id="send-prompt" class="send-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M17.991 6.01L5.399 10.563l4.195 2.428l3.699-3.7a1 1 0 0 1 1.414 1.415l-3.7 3.7l2.43 4.194L17.99 6.01Zm.323-2.244c1.195-.433 2.353.725 1.92 1.92l-5.282 14.605c-.434 1.198-2.07 1.344-2.709.241l-3.217-5.558l-5.558-3.217c-1.103-.639-.957-2.275.241-2.709z" />
-            </svg>
-          </button>
-          <button id="stop-generation" class="stop-btn" style="display: none;">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12S6.477 2 12 2m2 6h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2" />
-              </svg>
-          </button>
-        </div>
-        </div>`), chatHeader = container.querySelector(".ai-chat-header"), clearBtn = parseElement(`
-        <toolbarbutton 
-          id="clear-chat" 
-          class="clear-chat-btn" 
-          image="chrome://global/skin/icons/delete.svg" 
-          tooltiptext="Clear Chat"
-        />`, "xul"), settingsBtn = parseElement(`
-        <toolbarbutton 
-          id="open-settings-btn" 
-          class="settings-btn" 
-          image="chrome://global/skin/icons/settings.svg" 
-          tooltiptext="Settings"
-        />`, "xul"), collapseBtn = parseElement(`
-        <toolbarbutton 
-          id="findbar-collapse-btn" 
-          class="findbar-collapse-btn" 
-          image="chrome://browser/skin/zen-icons/unpin.svg" 
-          tooltiptext="Collapse"
-        />`, "xul");
-    chatHeader.appendChild(clearBtn), chatHeader.appendChild(settingsBtn), chatHeader.appendChild(collapseBtn);
-    let chatMessages = container.querySelector("#chat-messages"), promptInput = container.querySelector("#ai-prompt"), sendBtn = container.querySelector("#send-prompt"), stopBtn = container.querySelector("#stop-generation"), handleSend = () => {
-      let prompt = promptInput.value.trim();
-      this.sendMessage(prompt), promptInput.value = "";
-    };
-    return sendBtn.addEventListener("click", handleSend), stopBtn.addEventListener("click", () => {
-      this._abortController?.abort();
-    }), promptInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter" && !e.shiftKey)
-        e.preventDefault(), handleSend();
-    }), clearBtn.addEventListener("click", () => {
-      this.clear(), this.expanded = !1;
-    }), settingsBtn.addEventListener("click", () => {
-      SettingsModal.show();
-    }), collapseBtn.addEventListener("click", () => {
-      this.expanded = !1;
-    }), chatMessages.addEventListener("click", async (e) => {
-      if (e.target.classList.contains("citation-link")) {
-        let button = e.target, citationId = button.dataset.citationId, messageEl = button.closest(".chat-message[data-citations]");
-        if (messageEl) {
-          let citation = JSON.parse(messageEl.dataset.citations).find((c) => c.id == citationId);
-          if (citation && citation.source_quote)
-            PREFS2.debugLog(`Citation [${citationId}] clicked. Requesting highlight for:`, citation.source_quote), this.highlight(citation.source_quote);
-        }
-      } else if (e.target?.href) {
-        e.preventDefault();
-        try {
-          openTrustedLinkIn(e.target.href, "tab");
-        } catch {}
-      }
-    }), container;
-  },
-  createLoadingIndicator() {
-    return parseElement('<div class="chat-message chat-message-loading"><div class="message-content">Loading...</div></div>');
-  },
-  addChatMessage(message) {
-    let { role, content: content2 } = message;
-    if (!this.chatContainer || content2 === void 0 || content2 === null)
-      return;
-    let messagesContainer = this.chatContainer.querySelector("#chat-messages");
-    if (!messagesContainer)
-      return;
-    let type;
-    switch (role) {
-      case "user":
-        type = "user";
-        break;
-      case "assistant":
-        type = "ai";
-        break;
-      case "error":
-        type = "error";
-        break;
-      default:
-        return;
-    }
-    let messageDiv = parseElement(`<div class="chat-message chat-message-${type}"></div>`), contentDiv = parseElement('<div class="message-content"></div>');
-    if (role === "assistant" && typeof content2 === "object" && content2.answer !== void 0) {
-      let { answer, citations } = content2;
-      if (citations && citations.length > 0)
-        messageDiv.dataset.citations = JSON.stringify(citations);
-      let textToParse = answer.replace(/\[(\d+)\]/g, '<span class="citation-link" data-citation-id="$1">[$1]</span>');
-      contentDiv.appendChild(parseMD(textToParse));
-    } else {
-      let textContent = typeof content2 === "string" ? content2 : content2[0]?.text ?? "";
-      if (role === "assistant" && PREFS2.citationsEnabled) {
-        let { answer, citations } = browseBotFindbarLLM.parseModelResponseText(textContent);
-        if (citations && citations.length > 0)
-          messageDiv.dataset.citations = JSON.stringify(citations);
-        let textToParse = answer.replace(/\[(\d+)\]/g, '<span class="citation-link" data-citation-id="$1">[$1]</span>');
-        contentDiv.appendChild(parseMD(textToParse));
-      } else
-        contentDiv.appendChild(parseMD(textContent));
-    }
-    messageDiv.appendChild(contentDiv), messagesContainer.appendChild(messageDiv), messagesContainer.scrollTop = messagesContainer.scrollHeight, setTimeout(() => this._updateFindbarDimensions(), 10);
-  },
-  _needsSetup() {
-    if (browseBotFindbarLLM.currentProvider.name === "ollama")
-      return !PREFS2.ollamaBaseUrl || !PREFS2.getPref(PREFS2.OLLAMA_MODEL);
-    return !browseBotFindbarLLM.currentProvider.apiKey;
-  },
-  showAIInterface() {
-    if (!this.findbar)
-      return;
-    if (this.removeAIInterface(), this.findbar.classList.remove("ai-settings-active"), this._needsSetup())
-      this.apiKeyContainer = this.createAPIKeyInterface(), this.findbar.insertBefore(this.apiKeyContainer, this.findbar.firstChild);
-    else {
-      if (this.chatContainer = this.createChatInterface(), PREFS2.dndEnabled)
-        this.enableDND();
-      let history = browseBotFindbarLLM.getHistory();
-      for (let message of history)
-        this.addChatMessage(message);
-      this.findbar.insertBefore(this.chatContainer, this.findbar.firstChild);
-    }
-    setTimeout(() => this._updateFindbarDimensions(), 10);
-  },
-  focusInput() {
-    if (this.findbar)
-      setTimeout(() => this.findbar._findField.focus(), 10);
-  },
-  focusPrompt() {
-    let promptInput = this.chatContainer?.querySelector("#ai-prompt");
-    if (promptInput)
-      setTimeout(() => promptInput.focus(), 10);
-  },
-  setPromptText(text) {
-    let promptInput = this?.chatContainer?.querySelector("#ai-prompt");
-    if (promptInput && text)
-      promptInput.value = text;
-  },
-  async setPromptTextFromSelection() {
-    let text, selection = await messageManagerAPI.getSelectedText();
-    if (!selection || !selection.hasSelection)
-      text = this?.findbar?._findField?.value;
-    else
-      text = selection.selectedText;
-    this.setPromptText(text);
-  },
-  removeAIInterface() {
-    if (this.apiKeyContainer)
-      this.apiKeyContainer.remove(), this.apiKeyContainer = null;
-    if (this.chatContainer)
-      this.chatContainer.remove(), this.chatContainer = null;
-  },
-  init() {
-    if (!this.enabled)
-      return;
-    if (this.updateFindbar(), this.addListeners(), PREFS2.contextMenuEnabled)
-      this.addContextMenuItem();
-    this._overrideFindbarMatchesDisplay();
-  },
-  destroy() {
-    this.findbar = null, setTimeout(() => this._updateFindbarDimensions(), 10), this.expanded = !1;
-    try {
-      this.removeListeners();
-    } catch {}
-    this.removeExpandButton(), this.removeContextMenuItem(), this.removeAIInterface(), this._toolConfirmationDialog?.remove(), this._toolConfirmationDialog = null, SettingsModal.hide(), this._restoreFindbarMatchesDisplay();
-  },
-  addExpandButton() {
-    if (!this.findbar)
-      return !1;
-    if (this.removeExpandButton(), this.minimal) {
-      let container = this.findbar.querySelector(".findbar-container");
-      if (container && !container.querySelector("#findbar-ask")) {
-        let askBtn = parseElement('<button id="findbar-ask" anonid="findbar-ask">Ask</button>');
-        askBtn.addEventListener("click", () => {
-          let inpText = this.findbar._findField.value.trim();
-          this.sendMessage(inpText), this.findbar._findField.value = "", this.focusInput();
-        }), container.appendChild(askBtn), this.askButton = askBtn;
-      }
-    } else {
-      let button = parseElement('<button id="findbar-expand" anonid="findbar-expand">Expand</button>');
-      button.addEventListener("click", () => this.expanded = !0), button.textContent = "Expand", this.findbar.appendChild(button), this.expandButton = button;
-    }
-    return !0;
-  },
-  removeExpandButton() {
-    if (this.askButton)
-      this.askButton.remove(), this.askButton = null;
-    if (this.expandButton)
-      this.expandButton.remove(), this.expandButton = null;
-    return !0;
-  },
-  handleInputKeyPress: function(e) {
-    if (e?.key === "Enter" && e?.altKey) {
-      e.preventDefault();
-      let inpText = this.findbar._findField.value.trim();
-      this.sendMessage(inpText), this.findbar._findField.value = "", this.focusInput();
-    }
-  },
-  addContextMenuItem(retryCount = 0) {
-    if (this.contextMenuItem)
-      return;
-    if (!PREFS2.contextMenuEnabled)
-      return;
-    let contextMenu = document.getElementById("contentAreaContextMenu");
-    if (!contextMenu) {
-      if (retryCount < 5)
-        PREFS2.debugLog(`Context menu not found, retrying... (attempt ${retryCount + 1}/5)`), setTimeout(() => this.addContextMenuItem(retryCount + 1), 200);
-      else
-        PREFS2.debugError("Failed to add context menu item after 5 attempts: Context menu not found.");
-      return;
-    }
-    let menuItem = parseElement(`<menuitem 
-      label="Ask AI"
-      accesskey="A" 
-      id = "browse-bot-context-menu-item">
-      </menuitem>`, "xul");
-    menuItem.addEventListener("command", this.handleContextMenuClick.bind(this)), this.contextMenuItem = menuItem;
-    let searchSelectItem = contextMenu.querySelector("#context-searchselect");
-    if (searchSelectItem)
-      if (searchSelectItem.nextSibling)
-        contextMenu.insertBefore(menuItem, searchSelectItem.nextSibling);
-      else
-        contextMenu.appendChild(menuItem);
-    else {
-      let redoSeparator = contextMenu.querySelector("#context-sep-redo");
-      if (redoSeparator)
-        if (redoSeparator.nextSibling)
-          contextMenu.insertBefore(menuItem, redoSeparator.nextSibling);
-        else
-          contextMenu.appendChild(menuItem);
-      else
-        return;
-    }
-    this._updateContextMenuText = this.updateContextMenuText.bind(this), contextMenu.addEventListener("popupshowing", this._updateContextMenuText);
-  },
-  removeContextMenuItem: function() {
-    this?.contextMenuItem?.remove(), this.contextMenuItem = null, document?.getElementById("contentAreaContextMenu")?.removeEventListener("popupshowing", this._updateContextMenuText);
-  },
-  handleContextMenuClick: async function() {
-    let selection = await messageManagerAPI.getSelectedText(), finalMessage;
-    if (selection.hasSelection)
-      finalMessage = PREFS2.contextMenuCommandWithSelection.replace("{selection}", selection.selectedText);
-    else
-      finalMessage = PREFS2.contextMenuCommandNoSelection;
-    if (this.expanded = !0, PREFS2.contextMenuAutoSend)
-      this.sendMessage(finalMessage), this.focusPrompt();
-    else
-      this.setPromptText(finalMessage), this.show(), this.focusPrompt();
-  },
-  handleContextMenuPrefChange: function(pref) {
-    if (pref.value)
-      this.addContextMenuItem();
-    else
-      this.removeContextMenuItem();
-  },
-  updateContextMenuText() {
-    if (!PREFS2.contextMenuEnabled || !this.contextMenuItem)
-      return;
-    let hasSelection = gContextMenu?.isTextSelected === !0;
-    this.contextMenuItem.label = hasSelection ? "Ask AI" : "Summarize with AI";
-  },
-  enableResize() {
-    if (!this.findbar || this._resizeHandle)
-      return;
-    let resizeHandle = parseElement('<div class="findbar-resize-handle"></div>');
-    this.findbar.appendChild(resizeHandle), this._resizeHandle = resizeHandle, this._startResize = this.startResize.bind(this), this._resizeHandle.addEventListener("mousedown", this._startResize);
-  },
-  startResize(e) {
-    if (e.button !== 0 || !this.findbar)
-      return;
-    this._isResizing = !0, this._initialMouseCoor = { x: e.clientX, y: e.clientY };
-    let rect = this.findbar.getBoundingClientRect();
-    this.startWidth = rect.width, this._handleResize = this.doResize.bind(this), this._stopResize = this.stopResize.bind(this), document.addEventListener("mousemove", this._handleResize), document.addEventListener("mouseup", this._stopResize);
-  },
-  doResize(e) {
-    if (!this._isResizing || !this.findbar)
-      return;
-    let minWidth = 300, maxWidth = 800, directionFactor = PREFS2.position.includes("right") ? -1 : 1, newWidth = this.startWidth + (e.clientX - this._initialMouseCoor.x) * directionFactor;
-    newWidth = Math.min(Math.max(newWidth, minWidth), maxWidth), this.findbar.style.width = `${newWidth}px`, this._updateFindbarDimensions();
-  },
-  stopResize() {
-    this._isResizing = !1, document.removeEventListener("mousemove", this._handleResize), document.removeEventListener("mouseup", this._stopResize), this._handleResize = null, this._stopResize = null, this._updateFindbarDimensions(), this._saveFindbarDimensions();
-  },
-  disableResize() {
-    this._resizeHandle?.remove(), this._resizeHandle = null, this.stopResize();
-  },
-  startDrag(e) {
-    if (!this.chatContainer || e.button !== 0)
-      return;
-    this._isDragging = !0, this._initialMouseCoor = { x: e.clientX, y: e.clientY };
-    let rect = this.findbar.getBoundingClientRect();
-    this._initialContainerCoor = { x: rect.left, y: rect.top }, this._handleDrag = this.doDrag.bind(this), this._stopDrag = this.stopDrag.bind(this), document.addEventListener("mousemove", this._handleDrag), document.addEventListener("mouseup", this._stopDrag);
-  },
-  doDrag(e) {
-    if (!this._isDragging)
-      return;
-    let minCoors = { x: 15, y: 35 }, rect = this.findbar.getBoundingClientRect(), maxCoors = {
-      x: window.innerWidth - rect.width - 33,
-      y: window.innerHeight - rect.height - 33
-    }, newCoors = {
-      x: this._initialContainerCoor.x + (e.clientX - this._initialMouseCoor.x),
-      y: this._initialContainerCoor.y + (e.clientY - this._initialMouseCoor.y)
-    };
-    if (newCoors.x -= getSidebarWidth(), newCoors.x = Math.max(minCoors.x, Math.min(newCoors.x, maxCoors.x)), newCoors.y = Math.max(minCoors.y, Math.min(newCoors.y, maxCoors.y)), PREFS2.pseudoBg)
-      this._updateFindbarDimensions();
-    this.findbar.style.setProperty("left", `${newCoors.x}px`, "important"), this.findbar.style.setProperty("top", `${newCoors.y}px`, "important"), this.findbar.style.setProperty("right", "unset", "important"), this.findbar.style.setProperty("bottom", "unset", "important");
-  },
-  stopDrag() {
-    if (this._isDragging = !1, !PREFS2.pseudoBg)
-      this.findbar.style.setProperty("transition", "all 0.3s ease", "important"), setTimeout(() => this.findbar.style.removeProperty("transition"), 400), setTimeout(() => this._updateFindbarDimensions(), 401);
-    this.snapToClosestCorner(), this._initialMouseCoor = { x: null, y: null }, this._initialContainerCoor = { x: null, y: null }, document.removeEventListener("mouseup", this._stopDrag), document.removeEventListener("mousemove", this._handleDrag), this._handleDrag = null, this._stopDrag = null, setTimeout(() => this._updateFindbarDimensions(), 0);
-  },
-  snapToClosestCorner() {
-    if (!this.findbar || !PREFS2.dndEnabled)
-      return;
-    let rect = this.findbar.getBoundingClientRect(), { left: currentX, top: currentY, width: findbarWidth, height: findbarHeight } = rect, snapPoints = {
-      "top-left": { x: 0, y: 0 },
-      "top-right": { x: window.innerWidth - findbarWidth, y: 0 },
-      "bottom-left": { x: 0, y: window.innerHeight - findbarHeight },
-      "bottom-right": {
-        x: window.innerWidth - findbarWidth,
-        y: window.innerHeight - findbarHeight
-      }
-    }, closestPointName = PREFS2.position, minDistance = 1 / 0;
-    for (let name in snapPoints) {
-      let p = snapPoints[name], distance = Math.sqrt(Math.pow(currentX - p.x, 2) + Math.pow(currentY - p.y, 2));
-      if (distance < minDistance)
-        minDistance = distance, closestPointName = name;
-    }
-    if (closestPointName !== PREFS2.position)
-      PREFS2.position = closestPointName;
-    this.findbar.style.removeProperty("left"), this.findbar.style.removeProperty("top"), this.findbar.style.removeProperty("bottom"), this.findbar.style.removeProperty("right");
-  },
-  enableDND() {
-    if (!this.chatContainer)
-      return;
-    let handle = this.chatContainer.querySelector(".findbar-drag-handle");
-    if (!handle)
-      return;
-    this._startDrag = this.startDrag.bind(this), handle.addEventListener("mousedown", this._startDrag);
-  },
-  disableDND() {
-    if (this._isDragging = !1, !this.chatContainer)
-      return;
-    let handle = this.chatContainer.querySelector(".findbar-drag-handle");
-    if (!handle)
-      return;
-    handle.removeEventListener("mousedown", this._startDrag), document.removeEventListener("mouseup", this._stopDrag), document.removeEventListener("mousemove", this._handleDrag), this._startDrag = null, this._stopDrag = null;
-  },
-  addKeymaps: function(e) {
-    if (e.key?.toLowerCase() === "escape") {
-      if (SettingsModal._modalElement && SettingsModal._modalElement.parentNode)
-        e.preventDefault(), e.stopPropagation(), SettingsModal.hide();
-      else if (this._toolConfirmationDialog)
-        this._toolConfirmationDialog.querySelector(".cancel-tool")?.click();
-      else if (this.expanded)
-        e.preventDefault(), e.stopPropagation(), this.expanded = !1, this.focusInput();
-    }
-  },
-  addListeners() {
-    this._updateFindbar = this.updateFindbar.bind(this), this._addKeymaps = this.addKeymaps.bind(this), this._handleInputKeyPress = this.handleInputKeyPress.bind(this);
-    let _clearLLMData = () => {
-      this.updateFindbarStatus(), this.clear();
-    }, _handleContextMenuPrefChange = this.handleContextMenuPrefChange.bind(this), _handleMinimalPrefChange = this.handleMinimalPrefChange.bind(this), _handleBackgroundStyleChange = () => {
-      updateSidebarWidth();
-    };
-    gBrowser.tabContainer.addEventListener("TabSelect", this._updateFindbar), document.addEventListener("keydown", this._addKeymaps), this._handleFindbarOpenEvent = this.handleFindbarOpenEvent.bind(this), this._handleFindbarCloseEvent = this.handleFindbarCloseEvent.bind(this), window.addEventListener("findbaropen", this._handleFindbarOpenEvent), window.addEventListener("findbarclose", this._handleFindbarCloseEvent), this._agenticModeListener = addPrefListener(PREFS2.AGENTIC_MODE, _clearLLMData), this._backgroundStylesListener = addPrefListener(PREFS2.BACKGROUND_STYLE, _handleBackgroundStyleChange), this._citationsListener = addPrefListener(PREFS2.CITATIONS_ENABLED, _clearLLMData), this._minimalListener = addPrefListener(PREFS2.MINIMAL, _handleMinimalPrefChange), this._contextMenuEnabledListener = addPrefListener(PREFS2.CONTEXT_MENU_ENABLED, _handleContextMenuPrefChange), this._persistListener = addPrefListener(PREFS2.PERSIST, (pref) => {
-      if (!this.findbar)
-        return;
-      if (pref.value)
-        this.findbar.history = browseBotFindbarLLM.history;
-      else
-        this.findbar.history = null;
-    }), this._dndListener = addPrefListener(PREFS2.DND_ENABLED, (pref) => {
-      if (pref.value)
-        this.enableDND(), this.enableResize();
-      else
-        this.disableDND(), this.disableResize();
-    });
-  },
-  removeListeners() {
-    if (this.findbar)
-      this.findbar._findField.removeEventListener("keypress", this._handleInputKeyPress), this.findbar._findField.removeEventListener("input", this._handleFindFieldInput);
-    gBrowser.tabContainer.removeEventListener("TabSelect", this._updateFindbar), document.removeEventListener("keydown", this._addKeymaps), window.removeEventListener("findbaropen", this._handleFindbarOpenEvent), window.removeEventListener("findbarclose", this._handleFindbarCloseEvent), removePrefListener(this._agenticModeListener), removePrefListener(this._backgroundStylesListener), removePrefListener(this._citationsListener), removePrefListener(this._contextMenuEnabledListener), removePrefListener(this._minimalListener), removePrefListener(this._persistListener), removePrefListener(this._dndListener), this.disableDND(), this._handleInputKeyPress = null, this._updateFindbar = null, this._addKeymaps = null, this._agenticModeListener = null, this._citationsListener = null, this._contextMenuEnabledListener = null, this._minimalListener = null, this._dndListener = null, this._handleFindbarOpenEvent = null, this._handleFindbarCloseEvent = null;
-  },
-  handleFindbarOpenEvent: function() {
-    if (this.enabled)
-      PREFS2.debugLog("Findbar is being opened"), setTimeout(() => this.findbar._findField.placeholder = "Press Alt + Enter to ask AI", 100), setTimeout(() => this._updateFindbarDimensions(), 1);
-  },
-  handleFindbarCloseEvent: function() {
-    if (this.enabled) {
-      if (PREFS2.debugLog("Findbar is being closed"), this._isStreaming)
-        this._abortController?.abort();
-    }
-  }
-};
-
-// findbar-ai/llm/providers.js
-import {
-  createGoogleGenerativeAI,
-  createOpenAI,
-  createAnthropic,
-  createOpenAICompatible,
-  createCerebras
-} from "./vercel-ai-sdk.uc.mjs";
-
-// utils/favicon.js
-function googleFaviconAPI(domainOrUrl, size = 32) {
-  let domain;
-  try {
-    domain = new URL(domainOrUrl).hostname;
-  } catch {
-    domain = domainOrUrl;
-  }
-  return `https://s2.googleusercontent.com/s2/favicons?domain_url=https://${domain}&sz=${size}`;
-}
-
-// findbar-ai/llm/providers.js
-var providerPrototype = {
-  get apiKey() {
-    return prefs_default.getPref(this.apiPref);
-  },
-  set apiKey(v) {
-    if (typeof v === "string" && this.apiPref)
-      prefs_default.setPref(this.apiPref, v);
-  },
-  get model() {
-    return prefs_default.getPref(this.modelPref);
-  },
-  set model(v) {
-    if (!this.AVAILABLE_MODELS) {
-      if (typeof v === "string" && this.modelPref)
-        prefs_default.setPref(this.modelPref, v);
-    } else if (this.AVAILABLE_MODELS.includes(v))
-      prefs_default.setPref(this.modelPref, v);
-  },
-  getModel() {
-    if (this.create === createOpenAICompatible) {
-      let config = {
-        name: this.name,
-        apiKey: this.apiKey || "not_required",
-        baseURL: this.baseURL
-      };
-      return this.create(config).chatModel(this.model);
-    }
-    let config = { apiKey: this.apiKey };
-    return this.create(config)(this.model);
-  }
-}, mistral = Object.assign(Object.create(providerPrototype), {
-  name: "mistral",
-  label: "Mistral AI",
-  faviconUrl: googleFaviconAPI("mistral.ai"),
-  apiKeyUrl: "https://console.mistral.ai/api-keys/",
-  AVAILABLE_MODELS: [
-    "pixtral-large-latest",
-    "mistral-large-latest",
-    "mistral-medium-latest",
-    "mistral-medium-3",
-    "mistral-medium-3.5",
-    "mistral-medium-2508",
-    "mistral-medium-2505",
-    "mistral-small-latest",
-    "magistral-small-2507",
-    "magistral-medium-2507",
-    "magistral-small-2506",
-    "magistral-medium-2506",
-    "ministral-3b-latest",
-    "ministral-8b-latest",
-    "pixtral-12b-2409",
-    "open-mistral-7b",
-    "open-mixtral-8x7b",
-    "open-mixtral-8x22b"
-  ],
-  AVAILABLE_MODELS_LABELS: {
-    "pixtral-large-latest": "Pixtral Large (Latest)",
-    "mistral-large-latest": "Mistral Large (Latest)",
-    "mistral-medium-latest": "Mistral Medium (Latest)",
-    "mistral-medium-3": "Mistral Medium 3",
-    "mistral-medium-3.5": "Mistral Medium 3.5",
-    "mistral-medium-2508": "Mistral Medium (2508)",
-    "mistral-medium-2505": "Mistral Medium (2505)",
-    "mistral-small-latest": "Mistral Small(Latest)",
-    "magistral-small-2507": "Magistral Small (2507)",
-    "magistral-medium-2507": "Magistral Medium (2507)",
-    "magistral-small-2506": "Magistral Small (2506)",
-    "magistral-medium-2506": "Magistral Medium (2506)",
-    "ministral-3b-latest": "Ministral 3B (Latest)",
-    "ministral-8b-latest": "Ministral 8B (Latest)",
-    "pixtral-12b-2409": "Pixtral 12B (2409)",
-    "open-mistral-7b": "Open Mistral 7B",
-    "open-mixtral-8x7b": "Open Mixtral 8x7B",
-    "open-mixtral-8x22b": "Open Mixtral 8x22B"
-  },
-  modelPref: prefs_default.MISTRAL_MODEL,
-  apiPref: prefs_default.MISTRAL_API_KEY,
-  create: createOpenAICompatible,
-  baseURL: "https://api.mistral.ai/v1"
-}), gemini = Object.assign(Object.create(providerPrototype), {
-  name: "gemini",
-  label: "Google Gemini",
-  faviconUrl: googleFaviconAPI("gemini.google.com"),
-  apiKeyUrl: "https://aistudio.google.com/app/apikey",
-  AVAILABLE_MODELS: [
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-image-preview",
-    "gemini-3.1-flash-lite-preview",
-    "gemini-3-pro-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-pro-latest",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-flash-8b-latest"
-  ],
-  AVAILABLE_MODELS_LABELS: {
-    "gemini-3.8-flash": "Gemini 3.8 Flash",
-    "gemini-3.7-flash": "Gemini 3.7 Flash",
-    "gemini-3.6-flash": "Gemini 3.6 Flash",
-    "gemini-3.5-flash": "Gemini 3.5 Flash",
-    "gemini-3.5-flash-lite": "Gemini 3.5 Flash Lite",
-    "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
-    "gemini-3.1-flash-image-preview": "Gemini 3.1 Flash Image Preview",
-    "gemini-3.1-flash-lite-preview": "Gemini 3.1 Flash Lite Preview",
-    "gemini-3-pro-preview": "Gemini 3 Pro Preview",
-    "gemini-2.5-pro": "Gemini 2.5 Pro",
-    "gemini-2.5-flash": "Gemini 2.5 Flash",
-    "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
-    "gemini-2.0-flash": "Gemini 2.0 Flash",
-    "gemini-1.5-pro": "Gemini 1.5 Pro",
-    "gemini-1.5-pro-latest": "Gemini 1.5 Pro Latest",
-    "gemini-1.5-flash": "Gemini 1.5 Flash",
-    "gemini-1.5-flash-latest": "Gemini 1.5 Flash Latest",
-    "gemini-1.5-flash-8b": "Gemini 1.5 Flash 8B",
-    "gemini-1.5-flash-8b-latest": "Gemini 1.5 Flash 8B Latest"
-  },
-  modelPref: prefs_default.GEMINI_MODEL,
-  apiPref: prefs_default.GEMINI_API_KEY,
-  create: createGoogleGenerativeAI
-}), openai = Object.assign(Object.create(providerPrototype), {
-  name: "openai",
-  label: "OpenAI GPT",
-  faviconUrl: googleFaviconAPI("chatgpt.com"),
-  apiKeyUrl: "https://platform.openai.com/account/api-keys",
-  AVAILABLE_MODELS: [
-    "gpt-6-astra",
-    "gpt-5.6",
-    "gpt-5.6-luna",
-    "gpt-5.6-sol",
-    "gpt-5.6-terra",
-    "gpt-5.5",
-    "gpt-5.4-pro",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-5.4-nano",
-    "gpt-5.3-chat-latest",
-    "gpt-5.2-pro",
-    "gpt-5.2-chat-latest",
-    "gpt-5.2",
-    "gpt-5.1-codex-mini",
-    "gpt-5.1-codex",
-    "gpt-5.1-chat-latest",
-    "gpt-5.1",
-    "gpt-5-pro",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-3.5-turbo",
-    "o1",
-    "o3-mini",
-    "o3",
-    "o4-mini",
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    "gpt-5-chat-latest",
-    "gpt-5-codex"
-  ],
-  AVAILABLE_MODELS_LABELS: {
-    "gpt-6-astra": "GPT 6 Astra",
-    "gpt-5.6": "GPT 5.6",
-    "gpt-5.6-luna": "GPT 5.6 Luna",
-    "gpt-5.6-sol": "GPT 5.6 Sol",
-    "gpt-5.6-terra": "GPT 5.6 Terra",
-    "gpt-5.5": "GPT 5.5",
-    "gpt-5.4-pro": "GPT 5.4 Pro",
-    "gpt-5.4": "GPT 5.4",
-    "gpt-5.4-mini": "GPT 5.4 Mini",
-    "gpt-5.4-nano": "GPT 5.4 Nano",
-    "gpt-5.3-chat-latest": "GPT 5.3 Latest",
-    "gpt-5.2-pro": "GPT 5.2 Pro",
-    "gpt-5.2-chat-latest": "GPT 5.2 Latest",
-    "gpt-5.2": "GPT 5.2",
-    "gpt-5.1-codex-mini": "GPT 5.1 Mini",
-    "gpt-5.1-codex": "GPT 5.1 Codex",
-    "gpt-5.1-chat-latest": "GPT 5.1 Latest",
-    "gpt-5.1": "GPT 5.1",
-    "gpt-5-pro": "GPT 5 Pro",
-    "gpt-4.1": "GPT 4.1",
-    "gpt-4.1-mini": "GPT 4.1 Mini",
-    "gpt-4.1-nano": "GPT 4.1 Nano",
-    "gpt-4o": "GPT 4o",
-    "gpt-4o-mini": "GPT 4o Mini",
-    "gpt-4-turbo": "GPT 4 Turbo",
-    "gpt-4": "GPT 4",
-    "gpt-3.5-turbo": "GPT 3.5 Turbo",
-    o1: "O1",
-    "o3-mini": "O3 Mini",
-    o3: "O3",
-    "o4-mini": "O4 Mini",
-    "gpt-5": "GPT 5",
-    "gpt-5-mini": "GPT 5 Mini",
-    "gpt-5-nano": "GPT 5 Nano",
-    "gpt-5-chat-latest": "GPT 5 Latest",
-    "gpt-5-codex": "GPT 5 Codex"
-  },
-  modelPref: prefs_default.OPENAI_MODEL,
-  apiPref: prefs_default.OPENAI_API_KEY,
-  create: createOpenAI
-}), claude = Object.assign(Object.create(providerPrototype), {
-  name: "claude",
-  label: "Anthropic Claude",
-  faviconUrl: googleFaviconAPI("anthropic.com"),
-  apiKeyUrl: "https://console.anthropic.com/dashboard",
-  AVAILABLE_MODELS: [
-    "claude-opus-5",
-    "claude-sonnet-5",
-    "claude-fable-5-1",
-    "claude-fable-5",
-    "claude-opus-4-8",
-    "claude-opus-4-7",
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-opus-4-5",
-    "claude-hiku-4-5",
-    "claude-sonnet-4-5",
-    "claude-opus-4-1",
-    "claude-opus-4-0",
-    "claude-sonnet-4-0",
-    "claude-3-7-sonnet-latest",
-    "claude-3-5-haiku-latest"
-  ],
-  AVAILABLE_MODELS_LABELS: {
-    "claude-opus-5": "Claude Opus 5",
-    "claude-sonnet-5": "Claude Sonnet 5",
-    "claude-fable-5-1": "Claude Fable 5.1",
-    "claude-fable-5": "Claude Fable 5",
-    "claude-opus-4-8": "Claude Opus 4.8",
-    "claude-opus-4-7": "Claude Opus 4.7",
-    "claude-opus-4-6": "Claude Opus 4.6",
-    "claude-sonnet-4-6": "Claude Sonnet 4.6",
-    "claude-opus-4-5": "Claude Opus 4.5",
-    "claude-hiku-4-5": "Claude Hiku 4.5",
-    "claude-sonnet-4-5": "Claude Sonnet 4.5",
-    "claude-opus-4-1": "Claude Opus 4.1",
-    "claude-opus-4-0": "Claude Opus 4.0",
-    "claude-sonnet-4-0": "Claude Sonnet 4.0",
-    "claude-3-7-sonnet-latest": "Claude 3.7 Sonnet Latest",
-    "claude-3-5-haiku-latest": "Claude 3.5 Haiku Latest"
-  },
-  modelPref: prefs_default.CLAUDE_MODEL,
-  apiPref: prefs_default.CLAUDE_API_KEY,
-  create: createAnthropic
-}), grok = Object.assign(Object.create(providerPrototype), {
-  name: "grok",
-  label: "xAI Grok",
-  faviconUrl: googleFaviconAPI("x.ai"),
-  apiKeyUrl: "https://x.ai/api",
-  AVAILABLE_MODELS: [
-    "grok-4.6",
-    "grok-4.5",
-    "grok-4.20-reasoning",
-    "grok-4.20-non-reasoning",
-    "grok-4-1-fast-reasoning",
-    "grok-4-1-fast-non-reasoning",
-    "grok-4-1",
-    "grok-4-fast-non-reasoning",
-    "grok-4-fast-reasoning",
-    "grok-code-fast-1",
-    "grok-4",
-    "grok-3",
-    "grok-3-latest",
-    "grok-3-fast",
-    "grok-3-fast-latest",
-    "grok-3-mini",
-    "grok-3-mini-latest",
-    "grok-3-mini-fast",
-    "grok-3-mini-fast-latest",
-    "grok-2",
-    "grok-2-latest"
-  ],
-  AVAILABLE_MODELS_LABELS: {
-    "grok-4.6": "Grok 4.6",
-    "grok-4.5": "Grok 4.5",
-    "grok-4.20-reasoning": "Grok 4.20 (Reasoning)",
-    "grok-4.20-non-reasoning": "Grok 4.20 (Non-Reasoning)",
-    "grok-4-1-fast-reasoning": "Grok 4.1 Fast (Reasoning)",
-    "grok-4-1-fast-non-reasoning": "Grok 4.1 Fast (Non-Reasoning)",
-    "grok-4-1": "Grok 4.1",
-    "grok-4-fast-non-reasoning": "Grok 4 Fast (Non-Reasoning)",
-    "grok-4-fast-reasoning": "Grok 4 Fast (Reasoning)",
-    "grok-code-fast-1": "Grok Code Fast 1",
-    "grok-4": "Grok 4",
-    "grok-3": "Grok 3",
-    "grok-3-latest": "Grok 3 Latest",
-    "grok-3-fast": "Grok 3 Fast",
-    "grok-3-fast-latest": "Grok 3 Fast Latest",
-    "grok-3-mini": "Grok 3 Mini",
-    "grok-3-mini-latest": "Grok 3 Mini Latest",
-    "grok-3-mini-fast": "Grok 3 Mini Fast",
-    "grok-3-mini-fast-latest": "Grok 3 Mini Fast Latest",
-    "grok-2": "Grok 2",
-    "grok-2-latest": "Grok 2 Latest"
-  },
-  modelPref: prefs_default.GROK_MODEL,
-  apiPref: prefs_default.GROK_API_KEY,
-  create: createOpenAICompatible,
-  baseURL: "https://api.x.ai/v1"
-}), perplexity = Object.assign(Object.create(providerPrototype), {
-  name: "perplexity",
-  label: "Perplexity AI",
-  faviconUrl: googleFaviconAPI("perplexity.ai"),
-  apiKeyUrl: "https://perplexity.ai",
-  AVAILABLE_MODELS: [
-    "sonar-deep-research",
-    "sonar-reasoning-pro",
-    "sonar-reasoning",
-    "sonar-pro",
-    "sonar"
-  ],
-  AVAILABLE_MODELS_LABELS: {
-    "sonar-deep-research": "Sonar Deep Research",
-    "sonar-reasoning-pro": "Sonar Reasoning Pro",
-    "sonar-reasoning": "Sonar Reasoning",
-    "sonar-pro": "Sonar Pro",
-    sonar: "Sonar"
-  },
-  modelPref: prefs_default.PERPLEXITY_MODEL,
-  apiPref: prefs_default.PERPLEXITY_API_KEY,
-  create: createOpenAICompatible,
-  baseURL: "https://api.perplexity.ai"
-}), cerebras = Object.assign(Object.create(providerPrototype), {
-  name: "cerebras",
-  label: "Cerebras AI",
-  faviconUrl: "https://www.google.com/s2/favicons?sz=32&domain_url=cerebras.ai",
-  apiKeyUrl: "https://cerebras.ai",
-  AVAILABLE_MODELS: ["gpt-oss-120b", "gemma-4-31b"],
-  AVAILABLE_MODELS_LABELS: {
-    "gpt-oss-120b": "OpenAI GPT OSS 120B",
-    "gemma-4-31b": "Gemma 4 31B"
-  },
-  modelPref: prefs_default.CEREBRAS_MODEL,
-  apiPref: prefs_default.CEREBRAS_API_KEY,
-  create: createCerebras
-}), ollama = Object.assign(Object.create(providerPrototype), {
-  name: "ollama",
-  label: "Ollama (local)",
-  faviconUrl: googleFaviconAPI("ollama.com"),
-  apiKeyUrl: "",
-  baseUrlPref: prefs_default.OLLAMA_BASE_URL,
-  get baseUrl() {
-    return prefs_default.ollamaBaseUrl;
-  },
-  set baseUrl(v) {
-    if (typeof v === "string")
-      prefs_default.ollamaBaseUrl = v;
-  },
-  get baseURL() {
-    return this.baseUrl.replace(/\/api$/, "/v1");
-  },
-  AVAILABLE_MODELS: [
-    "deepseek-r1:8b",
-    "deepseek-r1:1.5b",
-    "deepseek-r1:7b",
-    "deepseek-r1:14b",
-    "deepseek-r1:32b",
-    "deepseek-r1:70b",
-    "mixtral:8x22b",
-    "mixtral:8x7b",
-    "qwen3:0.6b",
-    "qwen3:1.7b",
-    "qwen3:4b",
-    "qwen3:8b",
-    "qwen3:14b",
-    "qwen3:32b",
-    "qwen3:30b-a3b",
-    "qwen3:235b-a22b",
-    "llama4:scout",
-    "llama4:maverick"
-  ],
-  AVAILABLE_MODELS_LABELS: {
-    "deepseek-r1:8b": "DeepSeek R1 (8B parameters)",
-    "deepseek-r1:1.5b": "DeepSeek R1 (1.5B parameters)",
-    "deepseek-r1:7b": "DeepSeek R1 (7B parameters)",
-    "deepseek-r1:14b": "DeepSeek R1 (14B parameters)",
-    "deepseek-r1:32b": "DeepSeek R1 (32B parameters)",
-    "deepseek-r1:70b": "DeepSeek R1 (70B parameters)",
-    "mixtral:8x22b": "Mixtral (8x22B)",
-    "mixtral:8x7b": "Mixtral (8x7B)",
-    "qwen3:0.6b": "Qwen3 (0.6B parameters)",
-    "qwen3:1.7b": "Qwen3 (1.7B parameters)",
-    "qwen3:4b": "Qwen3 (4B parameters)",
-    "qwen3:8b": "Qwen3 (8B parameters)",
-    "qwen3:14b": "Qwen3 (14B parameters)",
-    "qwen3:32b": "Qwen3 (32B parameters)",
-    "qwen3:30b-a3b": "Qwen3 (30B-A3B)",
-    "qwen3:235b-a22b": "Qwen3 (235B-A22B)",
-    "llama4:scout": "Llama 4 Scout",
-    "llama4:maverick": "Llama 4 Maverick"
-  },
-  modelPref: prefs_default.OLLAMA_MODEL,
-  get apiKey() {
-    return "not_required";
-  },
-  set apiKey(v) {
-    return;
-  },
-  create: createOpenAICompatible
-}), custom = Object.create(providerPrototype, Object.getOwnPropertyDescriptors({
-  name: "custom",
-  label: "Custom Provider (OpenAI Compatible)",
-  faviconUrl: "chrome://global/skin/icons/settings.svg",
-  apiKeyUrl: "",
-  modelPref: prefs_default.CUSTOM_MODEL,
-  apiPref: prefs_default.CUSTOM_API_KEY,
-  get model() {
-    return prefs_default.getPref(this.modelPref) || "";
-  },
-  set model(v) {
-    if (typeof v === "string")
-      prefs_default.setPref(this.modelPref, v);
-  },
-  get baseURL() {
-    return prefs_default.getPref(prefs_default.CUSTOM_BASE_URL) || "";
-  },
-  create: createOpenAICompatible
-}));
-
-// findbar-ai/llm/index.js
-var citationSchema = z2.object({
-  answer: z2.string().describe("The conversational answer to the user's query."),
-  citations: z2.array(z2.object({
-    id: z2.number().describe("Unique identifier for the citation, corresponding to the marker in the answer text."),
-    source_quote: z2.string().describe("The exact, verbatim quote from the source text that supports the information.")
-  })).describe("An array of citation objects from the source text.")
-});
-
-class LLM {
-  constructor() {
-    this.history = [], this.AVAILABLE_PROVIDERS = {
-      claude,
-      gemini,
-      grok,
-      mistral,
-      ollama,
-      openai,
-      perplexity,
-      cerebras,
-      custom
-    };
-  }
-  get llmProvider() {
-    return prefs_default.llmProvider;
-  }
-  get currentProvider() {
-    return this.AVAILABLE_PROVIDERS[this.llmProvider || "gemini"] || this.AVAILABLE_PROVIDERS.gemini;
-  }
-  setProvider(providerName) {
-    if (this.AVAILABLE_PROVIDERS[providerName])
-      prefs_default.llmProvider = providerName, prefs_default.debugLog(`Switched LLM provider to: ${providerName}`);
-    else
-      prefs_default.debugError(`Provider "${providerName}" not found.`);
-  }
-  async getSystemPrompt() {
-    return "";
-  }
-  async generateText(options) {
-    let { prompt, ...rest } = options;
-    if (prompt)
-      this.history.push({ role: "user", content: prompt });
-    let config = {
-      model: this.currentProvider.getModel(),
-      system: await this.getSystemPrompt(),
-      messages: this.history,
-      temperature: prefs_default.llmTemperature,
-      topP: prefs_default.llmTopP,
-      topK: prefs_default.llmTopK,
-      frequencyPenalty: prefs_default.llmFrequencyPenalty,
-      presencePenalty: prefs_default.llmPresencePenalty,
-      maxOutputTokens: prefs_default.llmMaxOutputTokens,
-      ...rest
-    }, result = await generateText(config);
-    if (!rest.messages)
-      this.history.push(...result.response.messages);
-    return result;
-  }
-  async streamText(options) {
-    let { prompt, onFinish, ...rest } = options;
-    if (prompt)
-      this.history.push({ role: "user", content: prompt });
-    let self = this, config = {
-      model: this.currentProvider.getModel(),
-      system: await this.getSystemPrompt(),
-      messages: this.history,
-      temperature: prefs_default.llmTemperature,
-      topP: prefs_default.llmTopP,
-      topK: prefs_default.llmTopK,
-      frequencyPenalty: prefs_default.llmFrequencyPenalty,
-      presencePenalty: prefs_default.llmPresencePenalty,
-      maxOutputTokens: prefs_default.llmMaxOutputTokens,
-      ...rest,
-      async onFinish(result) {
-        if (!rest.messages)
-          self.history.push(...result.response.messages);
-        if (onFinish)
-          onFinish(result);
-      }
-    };
-    return streamText(config);
-  }
-  async generateTextWithCitations(options) {
-    let { prompt, ...rest } = options;
-    if (prompt)
-      this.history.push({ role: "user", content: prompt });
-    let config = {
-      model: this.currentProvider.getModel(),
-      system: await this.getSystemPrompt(),
-      messages: this.history,
-      output: Output.object({ schema: citationSchema }),
-      temperature: prefs_default.llmTemperature,
-      topP: prefs_default.llmTopP,
-      topK: prefs_default.llmTopK,
-      frequencyPenalty: prefs_default.llmFrequencyPenalty,
-      presencePenalty: prefs_default.llmPresencePenalty,
-      maxOutputTokens: prefs_default.llmMaxOutputTokens,
-      ...rest
-    }, { output } = await generateText(config);
-    if (!rest.messages)
-      this.history.push({ role: "assistant", content: JSON.stringify(output) });
-    return output;
-  }
-  getHistory() {
-    return [...this.history];
-  }
-  clearData() {
-    prefs_default.debugLog("Clearing LLM history and system prompt."), this.history = [];
-  }
-  getLastMessage() {
-    return this.history.length > 0 ? this.history[this.history.length - 1] : null;
-  }
-}
-
-class BrowseBotLLM extends LLM {
-  constructor() {
-    super();
-    this.systemInstruction = "";
-  }
-  get agenticMode() {
-    return prefs_default.agenticMode;
-  }
-  get streamEnabled() {
-    return prefs_default.streamEnabled;
-  }
-  get citationsEnabled() {
-    return prefs_default.citationsEnabled;
-  }
-  get maxToolCalls() {
-    return prefs_default.maxToolCalls;
-  }
-  async updateSystemPrompt() {
-    prefs_default.debugLog("Updating system prompt..."), this.systemInstruction = await this.getSystemPrompt();
-  }
-  async getSystemPrompt() {
-    let systemPrompt = "";
-    if (prefs_default.customSystemPrompt)
-      systemPrompt = prefs_default.customSystemPrompt + `
-
-`;
-    if (systemPrompt += `You are a helpful AI assistant integrated into Zen Browser, a minimal and modern fork of Firefox. Your primary purpose is to answer user questions based on the content of the current webpage.
-
-## Your Instructions:
-- Be concise, accurate, and helpful.`, this.agenticMode)
-      systemPrompt += `
-
-## AGENTIC MODE ENABLED - TOOL USAGE:
-You have access to browser functions. The user knows you have these abilities.
-- **CRITICAL**: When you decide to call a tool, give short summary of what tool are you calling and why?
-- Use tools when the user explicitly asks, or when it is the only logical way to fulfill their request (e.g., "search for...").
-- When asked about your own abilities, describe the functions you can perform based on the tools listed below.
-`, systemPrompt += await getToolSystemPrompt(), systemPrompt += "\n## More instructions for Running tools\n- While running tool like `openLink` and `newSplit` make sure URL is valid.\n- User will provide URL and title of current of webpage. If you need more context, use the `getPageTextContent` or `getHTMLContent` tools.\n- When the user asks you to \"read the current page\", use the `getPageTextContent()` or `getHTMLContent` tool.\n- Don't use search tool unless user explicitely asks.\n- When user asks you to manage tabs (close/group/move tabs) do it smartly first read tabs and take action don't ask too many question for confirmation.\n- If the user asks you to open a link by its text (e.g., \"click the 'About Us' link\"), you must first use `getHTMLContent()` to find the link's full URL, then use `openLink()` to open it.";
-    if (this.citationsEnabled)
-      systemPrompt += '\n\n## Citation Instructions\n- **Output Format**: Your entire response **MUST** be a single, valid JSON object with two keys: `"answer"` and `"citations"`.\n- **Answer**: The `"answer"` key holds the conversational text. Use Markdown Syntax for formatting like lists, bolding, etc.\n- **Citations**: The `"citations"` key holds an array of citation objects.\n- **When to Cite**: For any statement of fact that is directly supported by the provided page content, you **SHOULD** provide a citation. It is not mandatory for every sentence.\n- **How to Cite**: In your `"answer"`, append a marker like `[1]`, `[2]`. Each marker must correspond to a citation object in the array.\n- **CRITICAL RULES FOR CITATIONS**:\n    1.  **source_quote**: This MUST be the **exact, verbatim, and short** text from the page content.\n    2.  **Accuracy**: The `"source_quote"` field must be identical to the text on the page, including punctuation and casing.\n    3.  **Multiple Citations**: If multiple sources support one sentence, format them like `[1][2]`, not `[1,2]`.\n    4.  **Unique IDs**: Each citation object **must** have a unique `"id"` that matches its marker in the answer text.\n    5.  **Short**: The source quote must be short no longer than one sentence and should not contain line brakes.\n- **Do Not Cite**: Do not cite your own abilities, general greetings, or information not from the provided text. Make sure the text is from page text content not from page title or URL.\n- **Tool Calls**: If you call a tool, you **must not** provide citations in the same turn.\n\n### Citation Examples\n\nHere are some examples demonstrating the correct JSON output format.\n\n**Example 1: General Question with a List and Multiple Citations**\n-   **User Prompt:** "What are the main benefits of using this library?"\n-   **Your JSON Response:**\n    ```json\n    {\n      "answer": "This library offers several key benefits:\n\n*   **High Performance**: It is designed to be fast and efficient for large-scale data processing [1].\n*   **Flexibility**: You can integrate it with various frontend frameworks [2].\n*   **Ease of Use**: The API is well-documented and simple to get started with [3].",\n      "citations": [\n        {\n          "id": 1,\n          "source_quote": "The new architecture provides significant performance gains, especially for large-scale data processing."\n        },\n        {\n          "id": 2,\n          "source_quote": "It is framework-agnostic, offering adapters for React, Vue, and Svelte."\n        },\n        {\n          "id": 3,\n          "source_quote": "Our extensive documentation and simple API make getting started a breeze."\n        }\n      ]\n    }\n    ```\n\n**Example 2: A Sentence Supported by Two Different Sources**\n-   **User Prompt:** "Tell me about the project\'s history."\n-   **Your JSON Response:**\n    ```json\n    {\n      "answer": "The project was initially created in 2021 [1] and later became open-source in 2022 [2].",\n      "citations": [\n        {\n          "id": 1,\n          "source_quote": "Development began on the initial prototype in early 2021."\n        },\n        {\n          "id": 2,\n          "source_quote": "We are proud to announce that as of September 2022, the project is fully open-source."\n        }\n      ]\n    }\n    ```\n';
-    if (!this.agenticMode) {
-      systemPrompt += `
-- Strictly base all your answers on the webpage content provided below.
-- If the user's question cannot be answered from the content, state that the information is not available on the page.
-
-Here is the initial info about the current page:
-`;
-      let pageContext = await messageManagerAPI.getPageTextContent(!this.citationsEnabled);
-      systemPrompt += JSON.stringify(pageContext);
-    }
-    return systemPrompt;
-  }
-  parseModelResponseText(responseText) {
-    let answer = responseText, citations = [];
-    if (prefs_default.citationsEnabled)
-      try {
-        let jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/), jsonString = jsonMatch ? jsonMatch[1] : responseText, parsedContent = JSON.parse(jsonString);
-        if (typeof parsedContent.answer === "string") {
-          if (answer = parsedContent.answer, Array.isArray(parsedContent.citations))
-            citations = parsedContent.citations;
-        } else
-          prefs_default.debugLog("AI response JSON missing 'answer' field or not a string:", parsedContent);
-      } catch (e) {
-        prefs_default.debugError("Failed to parse AI message content as JSON:", e, "Raw Text:", responseText);
-      }
-    return { answer, citations };
-  }
-  async sendMessage(prompt, abortSignal) {
-    if (prefs_default.debugLog("Current history before sending:", this.history), this.citationsEnabled) {
-      let object = await super.generateTextWithCitations({
-        prompt,
-        abortSignal
-      });
-      if (browseBotFindbar?.findbar)
-        browseBotFindbar.findbar.history = this.getHistory();
-      return object;
-    }
-    if (!this.agenticMode)
-      if (this.streamEnabled) {
-        let self = this, streamResult = await super.streamText({ prompt, abortSignal });
-        return (async () => {
-          if (await streamResult.text, browseBotFindbar?.findbar)
-            browseBotFindbar.findbar.history = self.getHistory();
-        })(), streamResult;
-      } else {
-        let result = await super.generateText({ prompt, abortSignal });
-        if (browseBotFindbar?.findbar)
-          browseBotFindbar.findbar.history = this.getHistory();
-        return result;
-      }
-    let shouldToolBeCalled = async (toolName) => {
-      if (browseBotFindbar._createOrUpdateToolCallUI(toolName, "loading"), prefs_default.conformation) {
-        let friendlyName = toolNameMapping[toolName] || toolName;
-        if (!await browseBotFindbar.createToolConfirmationDialog([friendlyName]))
-          return prefs_default.debugLog(`Tool execution for '${toolName}' cancelled by user.`), browseBotFindbar._createOrUpdateToolCallUI(toolName, "declined"), !1;
-      }
-      return !0;
-    }, afterToolCall = (toolName, result) => {
-      let status = result.error ? "error" : "success";
-      browseBotFindbar._createOrUpdateToolCallUI(toolName, status, result.error);
-    }, findbarToolGroups = Object.keys(toolGroups).filter((group) => group !== "bookmarks" && group !== "misc"), tools = getTools(findbarToolGroups, { shouldToolBeCalled, afterToolCall }), commonConfig = {
-      prompt,
-      tools,
-      stopWhen: stepCountIs(this.maxToolCalls),
-      abortSignal
-    };
-    if (this.streamEnabled) {
-      let self = this;
-      return super.streamText({
-        ...commonConfig,
-        onFinish: () => {
-          if (browseBotFindbar?.findbar)
-            browseBotFindbar.findbar.history = self.getHistory();
-        }
-      });
-    } else {
-      let result = await super.generateText(commonConfig);
-      if (browseBotFindbar?.findbar)
-        browseBotFindbar.findbar.history = this.getHistory();
-      return result;
-    }
-  }
-  clearData() {
-    super.clearData(), this.systemInstruction = "";
-  }
-}
-var browseBotFindbarLLM = new BrowseBotLLM;
-window.browseBotFindabrLLM = browseBotFindbarLLM;
-
 // findbar-ai/urlbar.uc.js
-import { stepCountIs as stepCountIs2 } from "./vercel-ai-sdk.uc.mjs";
-var urlBarGroups = ["search", "navigation", "tabs", "workspaces", "uiFeedback"];
+var urlBarGroups = ["search", "navigation", "uiFeedback"];
 
 class UrlBarLLM extends LLM {
   async getSystemPrompt() {
     let systemPrompt = "";
-    if (PREFS2.customSystemPrompt)
-      systemPrompt = PREFS2.customSystemPrompt + `
+    if (PREFS2.urlbarSystemPrompt)
+      systemPrompt = PREFS2.urlbarSystemPrompt + `
 
 `;
-    return systemPrompt += `You are an AI integrated with Zen Browser URL bar, designed to assist users in browsing the web effectively and organizing their workspace in a better way.
+    return systemPrompt += `You are an AI integrated with Zen Browser URL bar, designed to assist users in browsing the web effectively.
 
 Your primary responsibilities include:
 1. Making tool calls in each response based on user input.
 2. If the user does not provide specific commands, perform a search using the provided terms. You are permitted to correct any grammar or spelling mistakes and refine user queries for better accuracy.
 3. If a URL is provided, open it directly.
 4. Update the user about your action with a Toast Notification.
-5. Managing tabs, if a user asks you to manage the tabs (grouping, closing, splitting) you will do it with tools you have access to.
 
 When to use Toast:
 - When you perform a non-default action, like searching or opening a URL, or if you fix a spelling mistake in the search term.
 - When you can't fulfill a user's requirement (show a short and clear toast why the user's requirement can't be fulfilled).
 - When a long and complicated task is completed.
+
+For anything beyond search, navigation, and opening links (like managing tabs, workspaces, bookmarks, or reading page content), tell the user to use the BrowseBot Library instead.
 
 Your goal is to ensure a seamless and user-friendly browsing experience.`, systemPrompt += await getToolSystemPrompt(urlBarGroups), systemPrompt;
   }
@@ -3893,12 +6924,22 @@ Your goal is to ensure a seamless and user-friendly browsing experience.`, syste
     let urlBarToolSet = getTools(urlBarGroups, { shouldToolBeCalled: async (toolName) => {
       let friendlyName = toolNameMapping[toolName] || toolName;
       return gURLBar.inputField.setAttribute("placeholder", `${friendlyName}...`), !0;
-    } });
-    await super.generateText({
+    } }), result = await super.generateText({
       prompt,
       tools: urlBarToolSet,
-      stopWhen: stepCountIs2(PREFS2.maxToolCalls)
-    });
+      maxSteps: PREFS2.maxToolCalls > 0 ? PREFS2.maxToolCalls : 5
+    }), provider = this.currentProvider;
+    if (isProviderBalanceExhausted(provider, result?.text))
+      try {
+        showToast({
+          title: "Pollinations is out of free credits",
+          description: "Add a free Pollinations API key in BrowseBot settings, then try again.",
+          timeout: 8000
+        });
+      } catch (e) {
+        PREFS2.debugError("Failed to show balance toast:", e);
+      }
+    return result;
   }
 }
 var urlBarLLM = new UrlBarLLM;
@@ -4091,6 +7132,1806 @@ var urlbarAI = {
   }
 };
 
+// findbar-ai/library/library.uc.js
+init_prefs();
+
+// findbar-ai/library/library-llm.js
+init_messageManager();
+init_prefs();
+var MODES = ["chat", "agent", "build"], agentGroups = [
+  "search",
+  "navigation",
+  "tabs",
+  "pageInteraction",
+  "youtube",
+  "bookmarks",
+  "workspaces",
+  "uiFeedback"
+];
+function truncate(text, limit) {
+  if (!limit || limit <= 0)
+    return text;
+  if (text.length <= limit)
+    return text;
+  return text.slice(0, limit) + `
+
+[Content truncated.]`;
+}
+
+class BrowseBotLibraryLLM extends LLM {
+  get mode() {
+    return prefs_default.libraryMode;
+  }
+  get isAgent() {
+    return this.mode === "agent";
+  }
+  get isBuild() {
+    return this.mode === "build";
+  }
+  async getSystemPrompt() {
+    let systemPrompt = "", modePrompt = prefs_default.librarySystemPromptFor(this.mode);
+    if (modePrompt)
+      systemPrompt = modePrompt + `
+
+`;
+    if (systemPrompt += `You are a helpful AI assistant integrated into the Zen Browser Library (BrowseBot).
+Be concise, accurate, and helpful.`, this.isBuild)
+      return systemPrompt += `
+
+` + await getBuildSystemPrompt(), systemPrompt += await getToolSystemPrompt(["build"]), systemPrompt;
+    if (this.isAgent) {
+      let { url, title } = messageManagerAPI.getUrlAndTitle();
+      systemPrompt += `
+
+## AGENTIC MODE ENABLED - TOOL USAGE:
+You have access to browser functions. The user knows you have these abilities.
+- Call tools silently without narrating each call. Make all the tool calls you need first, then summarize what you did and found afterwards.
+- Use tools when the user explicitly asks, or when it is the only logical way to fulfill their request (e.g., "search for...").
+- When asked about your own abilities, describe the functions you can perform based on the tools listed below.
+- Current page: "${title}" (${url})
+- If the user references tabs with @mentions, their full page content is provided as a separate message. Base answers about those tabs on that content.
+`, systemPrompt += await getToolSystemPrompt(agentGroups), systemPrompt += "\n## More instructions for Running tools\n- While running tool like `openLink` and `newSplit` make sure URL is valid.\n- Batch independent creates/deletes into one call: `createBookmark` takes a bookmarks array, `deleteBookmark` takes an ids array, `createTabFolder` takes a names array. Never call the same create/delete tool once per item.\n- When user asks you to manage tabs (close/group/move tabs) do it smartly: first read tabs and take action, don't ask too many questions for confirmation.\n- If the user asks you to open a link by its text (e.g., \"click the 'About Us' link\"), you must first use `getHTMLContent()` to find the link's full URL, then use `openLink()` to open it.\n- **Never** mention tabId, folderId, or workspaceId to the user. Refer to tabs, folders, and workspaces by name, not id.";
+    } else
+      systemPrompt += `
+
+## Chat Mode:
+- You have no tools and no automatic context of the current page.
+- The user can reference tabs with @mentions. Referenced tabs arrive as a separate message with their full page content.
+- If the user asks you to DO something in the browser, you cannot do it in this mode. Redirect them instead of attempting it:
+  - Build or style anything (Sine mods, CSS, scripts): tell them to type /build or click Build, then repeat the request there.
+  - Act on the browser (manage tabs, search the web, open links, bookmarks, workspaces, page actions): tell them to type /agent or click Agent, then repeat the request there.
+- When redirecting, briefly say what that mode will do for them. Never claim to have acted and never invent tool results.
+- If a question cannot be answered from the conversation, say so honestly.`;
+    return systemPrompt;
+  }
+  attachTabRefs(refs) {
+    if (!refs || refs.length === 0)
+      return;
+    let limit = 0, blocks = refs.map((ref) => `=== ${ref.title} (${ref.url}) ===
+${truncate(ref.text, limit)}`);
+    this.history.push({
+      role: "user",
+      content: `Referenced tabs (full page content):
+
+${blocks.join(`
+
+`)}`
+    });
+  }
+  async sendMessage(prompt, { refs = [], abortSignal, confirmTool, onToolStatus } = {}) {
+    if (prefs_default.debugLog(`libraryLLM (${this.mode}): Sending prompt: "${prompt}"`), this.attachTabRefs(refs), !this.isAgent && !this.isBuild) {
+      if (prefs_default.streamEnabled)
+        return super.streamText({ prompt, abortSignal });
+      return super.generateText({ prompt, abortSignal });
+    }
+    if (this.isBuild)
+      return this.sendBuildMessage(prompt, { abortSignal, confirmTool, onToolStatus });
+    let tools = getTools(agentGroups, { shouldToolBeCalled: async (toolName, args) => {
+      if (onToolStatus)
+        onToolStatus(toolName, "loading", null, args);
+      if (prefs_default.confirmation) {
+        let friendlyName = toolNameMapping[toolName] || toolName;
+        if (!(confirmTool ? await confirmTool([friendlyName], { toolName, args }) : !0)) {
+          if (prefs_default.debugLog(`Tool execution for '${toolName}' cancelled by user.`), onToolStatus)
+            onToolStatus(toolName, "declined", null, args);
+          return !1;
+        }
+      }
+      return !0;
+    }, afterToolCall: (toolName, result, args) => {
+      if (onToolStatus)
+        onToolStatus(toolName, result?.error ? "error" : "success", result?.error, args, result);
+    } }), commonConfig = {
+      prompt,
+      tools,
+      maxSteps: prefs_default.maxToolCalls > 0 ? prefs_default.maxToolCalls : 1 / 0,
+      abortSignal
+    };
+    if (prefs_default.streamEnabled)
+      return super.streamText(commonConfig);
+    return super.generateText(commonConfig);
+  }
+  async sendBuildMessage(prompt, { abortSignal, confirmTool, onToolStatus } = {}) {
+    let tools = getTools(["build"], { shouldToolBeCalled: async (toolName, args) => {
+      if (onToolStatus)
+        onToolStatus(toolName, "loading", null, args);
+      if (BUILD_NO_CONFIRM.has(toolName))
+        return !0;
+      if (toolName === "updateModFile" && args?.modId)
+        try {
+          let mods = await getInstalledMods();
+          if (isBrowseBotAuthor(mods?.[args.modId]?.author))
+            return !0;
+        } catch {}
+      let unsafeJSBlocked = !1;
+      if (toolName === "createMod")
+        try {
+          unsafeJSBlocked = String(args?.js ?? getStagedJS() ?? "").trim().length > 0 && !isUnsafeJSAllowed();
+        } catch {}
+      if (!prefs_default.confirmation && !unsafeJSBlocked)
+        return !0;
+      let friendlyName = toolNameMapping[toolName] || toolName;
+      if (!(confirmTool ? await confirmTool([friendlyName], { toolName, args, unsafeJSBlocked }) : !0)) {
+        if (prefs_default.debugLog(`Build tool '${toolName}' declined by user.`), onToolStatus)
+          onToolStatus(toolName, "declined", null, args);
+        return !1;
+      }
+      return !0;
+    }, afterToolCall: (toolName, result, args) => {
+      if (onToolStatus)
+        onToolStatus(toolName, result?.error ? "error" : "success", result?.error, args, result);
+    } }), commonConfig = {
+      prompt,
+      tools,
+      maxSteps: prefs_default.maxToolCalls > 0 ? prefs_default.maxToolCalls : 1 / 0,
+      abortSignal
+    };
+    if (prefs_default.streamEnabled)
+      return super.streamText(commonConfig);
+    return super.generateText(commonConfig);
+  }
+}
+var browseBotLibraryLLM = new BrowseBotLibraryLLM;
+window.browseBotLibraryLLM = browseBotLibraryLLM;
+
+// findbar-ai/library/library.uc.js
+init_messageManager();
+init_pref();
+
+// findbar-ai/library/sessions.js
+init_prefs();
+function sessionsDir() {
+  let dir = Services.dirsvc.get("ProfD", Ci.nsIFile);
+  return dir.append("browsebot-chats"), dir.path;
+}
+function sessionPath(id) {
+  let safe = String(id).replace(/[^a-z0-9_-]/gi, "") || "chat";
+  return `${sessionsDir()}/${safe}.json`;
+}
+async function readJSON(path) {
+  if (typeof IOUtils.readJSON === "function")
+    return IOUtils.readJSON(path);
+  return JSON.parse(await IOUtils.readUTF8(path));
+}
+async function writeJSON2(path, obj) {
+  if (typeof IOUtils.writeJSON === "function")
+    return IOUtils.writeJSON(path, obj);
+  return IOUtils.writeUTF8(path, JSON.stringify(obj));
+}
+async function ensureDir2(path) {
+  try {
+    if (typeof IOUtils.makeDirectory === "function") {
+      await IOUtils.makeDirectory(path, { createAncestors: !0, ignoreExisting: !0 });
+      return;
+    }
+  } catch {}
+  let dir = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+  if (dir.initWithPath(path), !dir.exists())
+    dir.create(Ci.nsIFile.DIRECTORY_TYPE, 493);
+}
+function isSessionMessage(m) {
+  return !!m && (m.role === "user" || m.role === "assistant") && m.content !== void 0 && m.content !== null;
+}
+function newSession(mode) {
+  let now = Date.now();
+  return {
+    id: `${now.toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+    title: "",
+    mode,
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+    toolRuns: []
+  };
+}
+function sessionTitle(messages) {
+  let first = messages.find((m) => m.role === "user");
+  return String(first?.content ?? "").replace(/\s+/g, " ").trim().slice(0, 48) || "Untitled chat";
+}
+async function loadSessions() {
+  try {
+    let children = [];
+    try {
+      children = await IOUtils.getChildren(sessionsDir());
+    } catch {
+      return [];
+    }
+    let out = [];
+    for (let child of children) {
+      if (!String(child).endsWith(".json"))
+        continue;
+      try {
+        let s = await readJSON(child);
+        if (!s || typeof s.id !== "string" || !Array.isArray(s.messages))
+          continue;
+        let messages = s.messages.filter(isSessionMessage);
+        if (messages.length === 0)
+          continue;
+        out.push({ ...s, messages });
+      } catch {}
+    }
+    return out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  } catch (e) {
+    return PREFS2.debugError("Failed to list chat sessions:", e), [];
+  }
+}
+async function upsertSession(session) {
+  await ensureDir2(sessionsDir()), await writeJSON2(sessionPath(session.id), {
+    ...session,
+    messages: session.messages.filter(isSessionMessage),
+    updatedAt: Date.now()
+  });
+}
+async function deleteSession(id) {
+  if (!id)
+    return;
+  try {
+    await IOUtils.remove(sessionPath(id));
+  } catch (e) {
+    PREFS2.debugLog("Failed to delete chat session:", e);
+  }
+}
+
+// findbar-ai/library/library.uc.js
+var MODE_LABELS = { chat: "Chat", agent: "Agent", build: "Build" }, SLASH_ITEMS = [
+  {
+    mode: "chat",
+    title: "/chat",
+    description: "Ask, no tools or page context",
+    keywords: ["talk", "ask", "question"]
+  },
+  {
+    mode: "agent",
+    title: "/agent",
+    description: "Full browser tool-belt",
+    keywords: ["tabs", "search", "browser", "bookmarks", "workspace"]
+  },
+  {
+    mode: "build",
+    title: "/build",
+    description: "Style the browser, build Sine mods",
+    keywords: ["mod", "css", "style", "theme", "script", "mods"]
+  },
+  {
+    command: "new",
+    title: "/new",
+    description: "Save this chat and start a new one",
+    keywords: ["new", "fresh", "reset", "restart", "start over", "delete"]
+  },
+  {
+    command: "delete",
+    title: "/delete",
+    description: "Delete this chat and start a new one",
+    keywords: ["delete", "remove", "clear", "trash", "forget", "erase"]
+  },
+  {
+    command: "close",
+    title: "/close",
+    description: "Close the library, reply continues in background",
+    keywords: ["exit", "hide", "dismiss"]
+  },
+  {
+    command: "continue",
+    openSessions: !0,
+    title: "/continue",
+    description: "Resume a saved chat",
+    keywords: ["resume", "restore", "history", "previous", "chats", "sessions", "reopen", "old"]
+  }
+], activeSession = null, activeSavedLength = 0;
+function getActiveSession() {
+  if (!activeSession)
+    activeSession = newSession(PREFS2.libraryMode), activeSavedLength = 0;
+  return activeSession;
+}
+function listTabs() {
+  try {
+    return (gZenWorkspaces?.allStoredTabs || gBrowser?.tabs || []).filter((tab) => tab && !tab.hidden && !tab.closing && !tab.hasAttribute("pending")).map((tab) => ({
+      tab,
+      title: tab.label || tab.linkedBrowser?.currentURI?.spec || "Untitled",
+      url: tab.linkedBrowser?.currentURI?.spec || "",
+      icon: tab.image || ""
+    })).filter((t) => t.url && t.url !== "about:newtab" && t.url !== "about:blank");
+  } catch {
+    return [];
+  }
+}
+function getLitHtml() {
+  if (getLitHtml.tag !== void 0)
+    return getLitHtml.tag;
+  let tag = null;
+  try {
+    let lit = ChromeUtils.importESModule("chrome://global/content/vendor/lit.all.mjs");
+    if (lit && typeof lit.html === "function")
+      tag = lit.html;
+  } catch {
+    tag = null;
+  }
+  return getLitHtml.tag = tag, tag;
+}
+function libraryHostOf(sectionEl) {
+  try {
+    if (sectionEl?.library?.zenLibrarySections)
+      return sectionEl.library;
+  } catch {}
+  try {
+    return sectionEl?.closest?.("zen-library") || null;
+  } catch {
+    return null;
+  }
+}
+function setLibraryWidth(sectionEl) {
+  try {
+    libraryHostOf(sectionEl)?.style.setProperty("--zen-library-content-width", "640px");
+  } catch {}
+}
+function clearLibraryWidth(sectionEl) {
+  try {
+    libraryHostOf(sectionEl)?.style.removeProperty("--zen-library-content-width");
+  } catch {}
+  try {
+    document.querySelector("zen-library")?.style.removeProperty("--zen-library-content-width");
+  } catch {}
+}
+var libraryRunController = null, libraryRunHost = null, libraryRunEndListeners = /* @__PURE__ */ new Set, pendingConfirmEl = null;
+function cancelPendingConfirm() {
+  try {
+    pendingConfirmEl?.querySelector(".decline-tool")?.click();
+  } catch {}
+}
+function shortText(text, limit = 44) {
+  let t = String(text ?? "").replace(/\s+/g, " ").trim();
+  return t.length > limit ? `${t.slice(0, limit - 1)}…` : t;
+}
+function fmtChars(n) {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
+function toolStatusIcon(status) {
+  return {
+    loading: "chrome://global/skin/icons/loading.svg",
+    success: "chrome://global/skin/icons/check.svg",
+    error: "chrome://global/skin/icons/error.svg",
+    declined: "chrome://global/skin/icons/blocked.svg"
+  }[status] || "";
+}
+function setStatusIcon(wrap, status) {
+  if (!wrap)
+    return;
+  if (status === "loading") {
+    wrap.innerHTML = icons.toolLoading;
+    return;
+  }
+  let img = wrap.querySelector("image");
+  if (!img)
+    img = xulImage(""), wrap.replaceChildren(img);
+  img.setAttribute("src", toolStatusIcon(status));
+}
+function visibleSessionMessages(history) {
+  return (history || []).filter((msg) => !msg.pageContext && !(msg.role === "user" && String(msg.content).startsWith("Referenced tabs")) && (msg.role === "user" || msg.role === "assistant") && !(msg.role === "assistant" && !String(msg.content).trim()));
+}
+function buildToolRunBox() {
+  let box = parseElement(`
+    <div class="bb-tool-run is-collapsed" data-state="working">
+      <div class="bb-tool-run-header">
+        <span class="bb-tool-run-status"></span>
+        <span class="bb-tool-run-title">Working…</span>
+        <img class="bb-tool-run-chevron" src="chrome://global/skin/icons/arrow-down-12.svg" alt="">
+      </div>
+      <div class="bb-tool-run-rows"></div>
+    </div>`);
+  return box.querySelector(".bb-tool-run-header").addEventListener("click", () => {
+    box.classList.toggle("is-collapsed");
+  }), {
+    box,
+    rows: box.querySelector(".bb-tool-run-rows"),
+    title: box.querySelector(".bb-tool-run-title")
+  };
+}
+function buildToolRow({ status, label, tool = "", argsText = "", resultText = "", secs = "" }) {
+  let row = parseElement(`
+    <div class="bb-tool-row" data-status="${status}">
+      <span class="bb-tool-row-icon"></span>
+      <div class="bb-tool-row-label"></div>
+      <span class="bb-tool-row-time"></span>
+    </div>`);
+  row.querySelector(".bb-tool-row-label").textContent = label, row.querySelector(".bb-tool-row-time").textContent = secs;
+  let detail = parseElement('<div class="bb-tool-row-detail" hidden></div>'), body = highlightResult(tool, argsText, resultText);
+  if (body)
+    detail.innerHTML = body;
+  return row.querySelector(".bb-tool-row-label").addEventListener("click", () => {
+    if (!detail.textContent)
+      return;
+    detail.hidden = !detail.hidden;
+  }), { row, detail };
+}
+function highlightResult(tool, argsText, resultText) {
+  let lang = {
+    applyPreviewCSS: "css",
+    getHTMLContent: "markup",
+    runChromeJS: "javascript"
+  }[tool] || "json";
+  if (lang === "css" || lang === "javascript") {
+    let code = extractCode(argsText);
+    return [
+      highlightCode(code || argsText, lang),
+      resultText ? highlightCode(resultText, "generic") : ""
+    ].filter(Boolean).join(`
+`);
+  }
+  return [
+    argsText ? highlightCode(argsText, lang) : "",
+    resultText ? highlightCode(resultText, lang) : ""
+  ].filter(Boolean).join(`
+`);
+}
+function extractCode(argsText) {
+  try {
+    let parsed = JSON.parse(argsText);
+    if (typeof parsed?.css === "string")
+      return parsed.css;
+    if (typeof parsed?.code === "string")
+      return parsed.code;
+  } catch {}
+  let m = /^\{"(?:css|code)":"([\s\S]*?)"?\}?…?$/.exec(String(argsText));
+  if (m) {
+    let fixed = m[1].replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
+    try {
+      return JSON.parse(`"${fixed}"`);
+    } catch {}
+  }
+  return "";
+}
+function toolTarget(toolName, args) {
+  if (!args || typeof args !== "object")
+    return "";
+  let pick = (...keys) => {
+    for (let k of keys) {
+      let v = args[k];
+      if (typeof v === "string" && v.trim())
+        return v.trim();
+    }
+    return "";
+  };
+  switch (toolName) {
+    case "search":
+      return shortText(pick("searchTerm"), 40);
+    case "openLink":
+      return shortText(pick("link"), 40);
+    case "searchTabs":
+    case "searchBookmarks":
+      return shortText(pick("query"), 40);
+    case "clickElement":
+    case "fillForm":
+    case "inspectChrome":
+      return shortText(pick("selector"), 40);
+    case "readMod":
+      if (!args.modId)
+        return "";
+      return shortText(args.modId, 40);
+    case "updateModFile":
+      if (!args.modId)
+        return "";
+      return shortText(args.file ? `${args.modId} / ${args.file}` : args.modId, 40);
+    case "createMod":
+    case "createTabFolder":
+    case "createWorkspace":
+      return shortText(pick("name", "title"), 40);
+    case "createBookmark":
+      return shortText(pick("title", "url"), 40);
+    default:
+      return shortText(pick("searchTerm", "query", "link", "url", "selector", "name", "title", "modId"), 40);
+  }
+}
+function toolVerb(toolName, status, args) {
+  let [loading, done] = toolVerbs[toolName] || [toolName, toolName];
+  if (status === "declined")
+    return `Declined - ${loading.charAt(0).toLowerCase() + loading.slice(1)}`;
+  let base = status === "loading" ? loading : done, target = toolTarget(toolName, args);
+  return target ? `${base} · ${target}` : base;
+}
+function toolArgsPreview(args) {
+  if (!args || typeof args !== "object")
+    return "";
+  try {
+    let text = JSON.stringify(args);
+    if (typeof args.css === "string" || typeof args.code === "string")
+      return text;
+    return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+  } catch {
+    return "";
+  }
+}
+function snapshotToolResult(result, limit = 1500) {
+  if (result === null || result === void 0)
+    return "";
+  let text = "";
+  try {
+    text = typeof result === "string" ? result : JSON.stringify(result);
+  } catch {
+    return "";
+  }
+  if (text.length > limit)
+    return `${text.slice(0, limit)}… [truncated ${text.length - limit} chars]`;
+  return text;
+}
+function broadcastRunEnd(except) {
+  for (let fn of [...libraryRunEndListeners]) {
+    if (fn === except)
+      continue;
+    try {
+      fn();
+    } catch {}
+  }
+}
+function mountPanel(host) {
+  let ui = parseElement(`
+    <div class="bb-library">
+      <div class="bb-library-header">
+        <div class="bb-mode-switch">
+          ${MODES.map((mode) => `<span class="bb-mode ${PREFS2.libraryMode === mode ? " is-active" : ""}" data-mode="${mode}">${MODE_LABELS[mode]}</span>`).join("")}
+        </div>
+        <div class="bb-header-actions">
+          <button class="zenux-icon-btn" data-action="sessions" tooltiptext="Saved chats"><img src="chrome://browser/skin/zen-icons/history.svg" /></button>
+          <button class="zenux-icon-btn" data-action="delete" tooltiptext="Delete chat"><img src="chrome://global/skin/icons/delete.svg" /></button>
+          <button class="zenux-icon-btn" data-action="settings" tooltiptext="BrowseBot settings"><img src="chrome://global/skin/icons/settings.svg" /></button>
+        </div>
+      </div>
+      <div class="bb-library-messages ai-chat-messages"></div>
+      <div class="bb-refs-bar"></div>
+      <div class="bb-build-bar" hidden>
+        <span class="bb-build-status"></span>
+        <button class="bb-build-create zenux-btn-primary">Create Mod</button>
+        <button class="bb-build-clear zenux-btn-ghost">Clear</button>
+      </div>
+      <div class="bb-library-composer ai-chat-input-group">
+        <div class="bb-library-popup" hidden></div>
+        <textarea class="bb-library-input zenux-input" placeholder="Ask anything…  ( / for commands, @ for tabs )" rows="3"></textarea>
+        <button class="bb-send-btn send-btn zenux-btn-primary">${icons.send}</button>
+        <button class="bb-stop-btn stop-btn zenux-btn-primary" style="display: none;">${icons.stop}</button>
+      </div>
+    </div>`), state = {
+    host,
+    pendingRefs: [],
+    abortController: null,
+    streaming: !1,
+    popupIndex: 0,
+    popupKind: null,
+    popupItems: [],
+    popupToken: null,
+    destroyed: !1
+  }, fullSessionList = [];
+  host._bbCleanup = () => {
+    state.destroyed = !0, clearLibraryWidth(host), libraryRunEndListeners.delete(onRunEnd);
+  };
+  let messagesEl = ui.querySelector(".bb-library-messages"), input = ui.querySelector(".bb-library-input"), sendBtn = ui.querySelector(".bb-send-btn"), stopBtn = ui.querySelector(".bb-stop-btn"), popup = ui.querySelector(".bb-library-popup"), refsBar = ui.querySelector(".bb-refs-bar"), deleteBtn = ui.querySelector('[data-action="delete"]'), sessionsBtn = ui.querySelector('[data-action="sessions"]'), modeButtons = [...ui.querySelectorAll(".bb-mode")], buildBar = ui.querySelector(".bb-build-bar"), buildStatus = ui.querySelector(".bb-build-status");
+  function refreshBuildBar() {
+    if (!buildBar)
+      return;
+    let isBuild = PREFS2.libraryMode === "build", { cssChars, jsChars } = getPreviewState(), hasPreview = cssChars > 0 || jsChars > 0;
+    if (buildBar.hidden = !(isBuild && hasPreview), buildStatus) {
+      let parts = [];
+      if (cssChars > 0)
+        parts.push(`${fmtChars(cssChars)} CSS`);
+      if (jsChars > 0)
+        parts.push(`${fmtChars(jsChars)} JS`);
+      buildStatus.textContent = parts.length ? `Preview: ${parts.join(" + ")}` : "";
+    }
+  }
+  function persistSession() {
+    let messages = browseBotLibraryLLM.getHistory();
+    if (messages.length === 0 || messages.length === activeSavedLength)
+      return;
+    let session = getActiveSession();
+    if (session.messages = messages, !session.title)
+      session.title = sessionTitle(messages);
+    session.mode = PREFS2.libraryMode, activeSavedLength = messages.length, upsertSession(session).catch((e) => PREFS2.debugError("Failed to save chat session:", e));
+  }
+  function abortRun() {
+    cancelPendingConfirm(), state.abortController?.abort(), libraryRunController?.abort();
+  }
+  function loadSession(s) {
+    if (abortRun(), activeSession = { ...s, messages: s.messages.map((m) => ({ ...m })) }, !Array.isArray(activeSession.toolRuns))
+      activeSession.toolRuns = [];
+    browseBotLibraryLLM.setHistory(activeSession.messages), activeSavedLength = activeSession.messages.length, setMode(s.mode, { fork: !1 }), renderHistory(), refreshBuildBar(), scrollDown();
+  }
+  function timeAgo(ts) {
+    let s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+    if (s < 60)
+      return "just now";
+    let m = Math.floor(s / 60);
+    if (m < 60)
+      return `${m}m ago`;
+    let h = Math.floor(m / 60);
+    if (h < 24)
+      return `${h}h ago`;
+    let d = Math.floor(h / 24);
+    return d < 30 ? `${d}d ago` : new Date(ts).toLocaleDateString();
+  }
+  function openSessionsPopup() {
+    loadSessions().then((sessions) => {
+      if (state.destroyed)
+        return;
+      if (sessions.length === 0) {
+        hidePopup(), showToast({
+          title: "No saved chats",
+          description: "Send a message first, then /continue to resume it."
+        });
+        return;
+      }
+      fullSessionList = sessions, state.popupKind = "sessions", paintSessionRows(sessionQuery());
+    }).catch((e) => PREFS2.debugError("Failed to list chat sessions:", e));
+  }
+  function sessionQuery() {
+    let m = input.value.match(/^\/continue\s*([\s\S]*)$/i);
+    return m ? m[1].trim() : "";
+  }
+  function paintSessionRows(query) {
+    let sessions = fuzzyFilterSort(fullSessionList, query, (s) => [s.title || ""]);
+    if (state.popupItems = sessions, state.popupIndex = 0, popup.innerHTML = "", sessions.length === 0) {
+      popup.hidden = !0;
+      return;
+    }
+    sessions.forEach((s, i) => {
+      let el = parseElement(`<div class="bb-popup-item${i === 0 ? " is-active" : ""}" data-index="${i}">
+          <span class="bb-popup-title">${escapeXmlAttribute(s.title || "Untitled chat")}</span>
+          <span class="bb-popup-desc">${escapeXmlAttribute(`${MODE_LABELS[s.mode] || s.mode} - ${timeAgo(s.updatedAt)}`)}</span>
+        </div>`);
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault(), applyPopupItem(i);
+      }), popup.appendChild(el);
+    }), popup.hidden = !1;
+  }
+  function openCreateModModal() {
+    let { cssChars, jsChars } = getPreviewState();
+    if (cssChars === 0 && jsChars === 0) {
+      showToast({
+        title: "Nothing staged",
+        description: "Ask Build mode to preview CSS or JS first."
+      });
+      return;
+    }
+    let jsBlocked = jsChars > 0 && !isUnsafeJSAllowed(), overlay = parseElement(`
+      <div class="bb-create-mod-overlay">
+        <div class="bb-create-mod-modal">
+          <h3>Create Sine Mod</h3>
+          <p class="bb-create-mod-hint">Preview: ${fmtChars(cssChars)} CSS${jsChars ? ` + ${fmtChars(jsChars)} JS` : ""}. Saved with the staged preview.</p>
+          ${jsBlocked ? '<label class="bb-create-mod-allow"><input type="checkbox" data-field="allow-js" /> Allow JS from unofficial sources so this script runs</label>' : ""}
+          <label>Name<input class="zenux-input" data-field="name" placeholder="e.g. Cyberpunk UI" /></label>
+          <label>Description<input class="zenux-input" data-field="description" placeholder="What does this mod do?" /></label>
+          <label>Author (optional)<input class="zenux-input" data-field="author" placeholder="${escapeXmlAttribute(buildAuthor())}" /></label>
+          <span class="bb-create-mod-error"></span>
+          <div class="bb-create-mod-actions">
+            <button class="zenux-btn-ghost" data-action="cancel">Cancel</button>
+            <button class="zenux-btn-primary" data-action="save">Create Mod</button>
+          </div>
+        </div>
+      </div>`), nameInput = overlay.querySelector('[data-field="name"]'), descInput = overlay.querySelector('[data-field="description"]'), authorInput = overlay.querySelector('[data-field="author"]'), errorEl = overlay.querySelector(".bb-create-mod-error"), close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay)
+        close();
+    }), overlay.querySelector('[data-action="cancel"]').addEventListener("click", close), overlay.querySelector('[data-action="save"]').addEventListener("click", async () => {
+      if (errorEl)
+        errorEl.textContent = "";
+      let needsAllow = getStagedJS().length > 0 && !isUnsafeJSAllowed(), allowInput = overlay.querySelector('[data-field="allow-js"]');
+      if (needsAllow && !allowInput) {
+        if (errorEl)
+          errorEl.textContent = "Reopen this dialog to allow the script.";
+        return;
+      }
+      if (needsAllow && !allowInput.checked) {
+        if (errorEl)
+          errorEl.textContent = "Tick the checkbox to allow the script, or turn on the Sine setting yourself.";
+        return;
+      }
+      let name = nameInput.value.trim() || "BrowseBot Mod", description = descInput.value.trim(), author = authorInput.value.trim() || buildAuthor(), saveBtn = overlay.querySelector('[data-action="save"]');
+      saveBtn.disabled = !0;
+      try {
+        if (needsAllow)
+          setUnsafeJSAllowed();
+        let created = await createSineMod({
+          name,
+          description,
+          css: getPreviewCSS(),
+          js: getStagedJS(),
+          author
+        });
+        close(), clearPreviewCSS(), clearStagedJS(), addMessage("ai", `Created mod **${created.name}** (id: \`${created.id}\`, ${created.files.length} files verified at \`${created.dir}\`) and registered it with Sine - reopen Settings → Sine Mods to see it. Staged preview was cleared; restart the browser if the script doesn't take effect.` + (created.jsBlocked ? ' Its script will NOT run until you turn on "Enable installing JS from unofficial sources" in Sine settings.' : "")), showToast({
+          title: "Mod created",
+          description: `${created.name} - see Sine Mods settings`
+        }), refreshBuildBar();
+      } catch (e) {
+        if (PREFS2.debugError("Create mod from UI failed:", e), errorEl)
+          errorEl.textContent = `Failed: ${e?.message || e}`;
+        saveBtn.disabled = !1;
+      }
+    }), document.body.appendChild(overlay), setTimeout(() => nameInput.focus(), 20);
+  }
+  ui.querySelector(".bb-build-create")?.addEventListener("click", openCreateModModal), ui.querySelector(".bb-build-clear")?.addEventListener("click", () => {
+    clearPreviewCSS(), clearStagedJS(), refreshBuildBar();
+  });
+  let scrollDown = () => {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    try {
+      let hostParent = libraryRunHost?.parentElement;
+      if (hostParent && hostParent !== messagesEl)
+        hostParent.scrollTop = hostParent.scrollHeight;
+    } catch {}
+  }, attachRunHost = () => {
+    if (libraryRunHost && libraryRunHost.parentElement !== messagesEl)
+      messagesEl.appendChild(libraryRunHost);
+  }, focusPrompt = () => {
+    if (!state.destroyed)
+      setTimeout(() => input.focus(), 10);
+  };
+  function autogrow() {
+    input.style.height = "auto", input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+  }
+  function clearInput() {
+    input.value = "", input.style.height = "";
+  }
+  function createToolConfirmationDialog(toolNames, detail = {}) {
+    return new Promise((resolve) => {
+      let { toolName, args } = detail, previewHtml = "";
+      if (toolName === "runChromeJS" && args?.code) {
+        let codeEl = parseElement('<pre class="zenux-code-confirm-code"><code></code></pre>');
+        codeEl.querySelector("code").innerHTML = highlightCode(`${String(args.code).slice(0, 800)}${String(args.code).length > 800 ? `
+// …preview truncated` : ""}`, "javascript"), previewHtml = codeEl.outerHTML;
+      } else if (toolName === "createMod") {
+        let label = [args?.name, args?.description].filter(Boolean).join(" - ").slice(0, 200);
+        if (label)
+          previewHtml = `<p class="tool-confirm-detail">${escapeXmlAttribute(label)}</p>`;
+      } else if (toolName === "updateModFile" && args?.modId)
+        previewHtml = `<p class="tool-confirm-detail">${escapeXmlAttribute(`${args.modId} / ${args.file || ""}`)}</p>`;
+      let warningHtml = detail.unsafeJSBlocked ? `<p class="tool-confirm-warning">Sine blocks scripts from unofficial sources, so this mod's script won't run until you enable that Sine setting.</p>` : "", confirmLabel = detail.unsafeJSBlocked ? "Create anyway" : "Allow", enableHtml = detail.unsafeJSBlocked ? '<button class="enable-create zenux-btn-primary">Enable &amp; create</button>' : "", notAgainHtml = detail.unsafeJSBlocked ? "" : `<button class="not-again zenux-btn-ghost">Don't ask again</button>`, dialog = parseElement(`
+        <div class="tool-confirmation-dialog">
+          <div class="tool-confirmation-content">
+            <p class="tool-confirm-title">Allow AI to do the following: ${toolNames?.join(", ")}?</p>
+            ${previewHtml}
+            ${warningHtml}
+            <div class="buttons">
+              ${notAgainHtml}
+              <div class="right-side-buttons">
+                ${enableHtml}
+                <button class="decline-tool zenux-btn-ghost">Decline</button>
+                <button class="confirm-tool zenux-btn-primary">${confirmLabel}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `), done = (value) => {
+        if (dialog.remove(), pendingConfirmEl === dialog)
+          pendingConfirmEl = null;
+        resolve(value);
+      };
+      if (pendingConfirmEl = dialog, dialog.querySelector(".enable-create")?.addEventListener("click", () => {
+        setUnsafeJSAllowed(), done(!0);
+      }), dialog.querySelector(".confirm-tool").addEventListener("click", () => {
+        done(!0);
+      }), dialog.querySelector(".decline-tool").addEventListener("click", () => {
+        done(!1);
+      }), dialog.querySelector(".not-again")?.addEventListener("click", () => {
+        PREFS2.confirmation = !1, done(!0);
+      }), (libraryRunHost ?? messagesEl).appendChild(dialog), scrollDown(), !isBrowseBotVisible())
+        try {
+          showToast({
+            title: "BrowseBot needs approval",
+            description: toolNames?.join(", "),
+            preset: 2,
+            buttonText: "Review",
+            timeout: 15000,
+            onClick: () => browseBotLibrary.open()
+          });
+        } catch {}
+    });
+  }
+  function addMessage(role, content2, refs = []) {
+    messagesEl.querySelector(".zenux-empty")?.remove();
+    let wrap = parseElement(`<div class="chat-message chat-message-${role === "user" ? "user" : role === "error" ? "error" : "ai"}"></div>`), contentDiv = parseElement('<div class="message-content"></div>');
+    return contentDiv.appendChild(parseMD(content2 || "")), wrap.appendChild(contentDiv), insertRefChips(contentDiv, refs), attachMessageActions(wrap, { onRegenerate: handleRegenerate }), messagesEl.appendChild(wrap), scrollDown(), wrap;
+  }
+  function visibleHistoryIndices(history) {
+    let indices = [];
+    return (history || []).forEach((msg, hi) => {
+      if (!msg.pageContext && !(msg.role === "user" && String(msg.content).startsWith("Referenced tabs")) && (msg.role === "user" || msg.role === "assistant") && !(msg.role === "assistant" && !String(msg.content).trim()))
+        indices.push(hi);
+    }), indices;
+  }
+  function handleRegenerate(wrap) {
+    if (!wrap?.isConnected || state.streaming || libraryRunController)
+      return;
+    let userWraps = [...messagesEl.querySelectorAll(".chat-message-user")], userWrap = null;
+    if (wrap.classList.contains("chat-message-user"))
+      userWrap = wrap;
+    else {
+      let prev = wrap.previousElementSibling;
+      while (prev) {
+        if (prev.classList?.contains("chat-message-user")) {
+          userWrap = prev;
+          break;
+        }
+        prev = prev.previousElementSibling;
+      }
+    }
+    if (!userWrap)
+      return;
+    let ordinal = userWraps.indexOf(userWrap);
+    if (ordinal < 0)
+      return;
+    let history = browseBotLibraryLLM.getHistory(), indices = visibleHistoryIndices(history), userVisiblePositions = indices.filter((hi) => history[hi]?.role === "user");
+    if (ordinal >= userVisiblePositions.length)
+      return;
+    let userVisiblePos = indices.indexOf(userVisiblePositions[ordinal]), userHistoryIndex = userVisiblePositions[ordinal], prompt = String(history[userHistoryIndex]?.content || "").trim();
+    if (!prompt)
+      return;
+    browseBotLibraryLLM.setHistory(history.slice(0, userHistoryIndex)), activeSavedLength = userHistoryIndex;
+    let session = getActiveSession();
+    if (Array.isArray(session.toolRuns))
+      session.toolRuns = session.toolRuns.filter((r) => {
+        let anchor = r.afterUser !== void 0 ? r.afterUser : r.after;
+        return anchor === void 0 || anchor < userVisiblePos;
+      });
+    let node = userWrap;
+    while (node) {
+      let next = node.nextSibling;
+      node.remove(), node = next;
+    }
+    deleteBtn.hidden = browseBotLibraryLLM.getHistory().length === 0, input.value = prompt, handleSend();
+  }
+  function insertRefChips(contentDiv, refs) {
+    if (!refs || refs.length === 0)
+      return;
+    let sorted = [...refs].sort((a, b) => b.title.length - a.title.length), walker = document.createTreeWalker(contentDiv, NodeFilter.SHOW_TEXT), textNodes = [];
+    while (walker.nextNode())
+      textNodes.push(walker.currentNode);
+    for (let startNode of textNodes) {
+      if (startNode.parentElement?.closest?.("pre, code"))
+        continue;
+      let node = startNode;
+      for (;; ) {
+        let best = null;
+        for (let ref of sorted) {
+          let token = `@${ref.title}`, idx = node.textContent.indexOf(token);
+          if (idx !== -1 && (!best || idx < best.idx))
+            best = { ref, idx, token };
+        }
+        if (!best)
+          break;
+        let parent = node.parentNode;
+        if (!parent)
+          break;
+        parent.insertBefore(document.createTextNode(node.textContent.slice(0, best.idx)), node), parent.insertBefore(refChip(best.ref, !1), node);
+        let after = document.createTextNode(node.textContent.slice(best.idx + best.token.length));
+        parent.replaceChild(after, node), node = after;
+      }
+    }
+  }
+  function refChip(ref, removable) {
+    let chip = parseElement(`<span class="bb-ref-chip">${ref.icon ? `<img src="${escapeXmlAttribute(ref.icon)}" />` : ""}<span>${escapeXmlAttribute(ref.title)}</span>${removable ? '<span class="bb-ref-remove"><img src="chrome://global/skin/icons/close.svg" /></span>' : ""}</span>`);
+    for (let img of chip.querySelectorAll("img"))
+      img.addEventListener("error", () => img.remove());
+    if (removable)
+      chip.querySelector(".bb-ref-remove")?.addEventListener("mousedown", (e) => {
+        e.preventDefault(), state.pendingRefs = state.pendingRefs.filter((r) => r.tab !== ref.tab), input.value = input.value.split(`@${ref.title}`).join("").replace(/ {2,}/g, " "), renderChips(), input.focus();
+      });
+    return chip;
+  }
+  function renderChips() {
+    refsBar.replaceChildren();
+    for (let ref of state.pendingRefs)
+      refsBar.appendChild(refChip(ref, !0));
+  }
+  function syncPendingRefs() {
+    let before = state.pendingRefs.length;
+    if (state.pendingRefs = state.pendingRefs.filter((r) => input.value.includes(`@${r.title}`)), state.pendingRefs.length !== before)
+      renderChips();
+  }
+  function appendToolRunBox(run) {
+    if (!run || !Array.isArray(run.tools) || run.tools.length === 0)
+      return;
+    let built = buildToolRunBox(), totalSecs = 0;
+    for (let entry of run.tools)
+      totalSecs += parseFloat(entry.secs) || 0;
+    built.title.textContent = `Used ${run.tools.length} tool${run.tools.length === 1 ? "" : "s"}` + (totalSecs > 0 ? ` · ${totalSecs.toFixed(1)}s` : "");
+    for (let entry of run.tools) {
+      let builtRow = buildToolRow(entry);
+      setStatusIcon(builtRow.row.querySelector(".bb-tool-row-icon"), entry.status), built.rows.appendChild(builtRow.row), built.rows.appendChild(builtRow.detail);
+    }
+    built.box.dataset.state = "done", setStatusIcon(built.box.querySelector(".bb-tool-run-status"), "success"), messagesEl.appendChild(built.box);
+  }
+  let shownSessionId = null;
+  function renderHistory() {
+    let session = getActiveSession(), history = browseBotLibraryLLM.getHistory();
+    if (deleteBtn.hidden = history.length === 0, session.id === shownSessionId && messagesEl.children.length > 0)
+      return;
+    if (messagesEl.innerHTML = "", history.length === 0) {
+      let empty = parseElement('<div class="zenux-empty">Ask anything. Type <b>/</b> to switch modes, <b>@</b> to reference tabs.</div>');
+      messagesEl.appendChild(empty), shownSessionId = session.id;
+      return;
+    }
+    let anchorOf = (r) => r.afterUser !== void 0 ? r.afterUser : r.after, runs = (getActiveSession().toolRuns || []).slice().sort((a, b) => anchorOf(a) - anchorOf(b) || (a.burst || 0) - (b.burst || 0)), visibleIndices = [];
+    (history || []).forEach((msg, hi) => {
+      if (!msg.pageContext && !(msg.role === "user" && String(msg.content).startsWith("Referenced tabs")) && (msg.role === "user" || msg.role === "assistant") && !(msg.role === "assistant" && !String(msg.content).trim()))
+        visibleIndices.push(hi);
+    });
+    let visible = visibleIndices.map((hi) => history[hi]), groups = /* @__PURE__ */ new Map, orphanRuns = [];
+    for (let r of runs) {
+      let a = anchorOf(r);
+      if (a === void 0 || a < 0 || a >= visible.length) {
+        orphanRuns.push(r);
+        continue;
+      }
+      if (!groups.has(a))
+        groups.set(a, []);
+      groups.get(a).push(r);
+    }
+    let afterPos = /* @__PURE__ */ new Map, queueAt = (pos, run) => {
+      if (!afterPos.has(pos))
+        afterPos.set(pos, []);
+      afterPos.get(pos).push(run);
+    };
+    for (let [anchor, group] of groups) {
+      let anchorHi = visibleIndices[anchor], nextUserHi = history.length;
+      for (let i = anchor + 1;i < visible.length; i++)
+        if (visible[i]?.role === "user") {
+          nextUserHi = visibleIndices[i];
+          break;
+        }
+      let candidates = [];
+      for (let hi = anchorHi + 1;hi < nextUserHi; hi++) {
+        let m = history[hi];
+        if (m?.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.length > 0)
+          candidates.push(hi);
+      }
+      group.forEach((run, j) => {
+        let targetHi = candidates[j] ?? null;
+        if (targetHi === null) {
+          let fallback = anchor;
+          for (let i = anchor + 1;i < visible.length; i++) {
+            if (visible[i]?.role === "user")
+              break;
+            fallback = i;
+          }
+          queueAt(fallback, run);
+          return;
+        }
+        let pos = anchor;
+        for (let i = anchor;i < visible.length; i++)
+          if (visibleIndices[i] <= targetHi)
+            pos = i;
+          else
+            break;
+        queueAt(pos, run);
+      });
+    }
+    visible.forEach((msg, i) => {
+      addMessage(msg.role, String(msg.content));
+      for (let run of afterPos.get(i) || [])
+        appendToolRunBox(run);
+    });
+    for (let run of orphanRuns)
+      appendToolRunBox(run);
+    shownSessionId = session.id;
+  }
+  function setMode(mode, { fork = !0 } = {}) {
+    if (!MODES.includes(mode))
+      return;
+    if (fork && browseBotLibraryLLM.getHistory().length > 0 && getActiveSession().mode !== mode)
+      abortRun(), persistSession(), activeSession = newSession(mode), activeSavedLength = 0, browseBotLibraryLLM.clearData(), renderHistory();
+    else
+      getActiveSession().mode = mode;
+    PREFS2.libraryMode = mode, modeButtons.forEach((btn) => btn.classList.toggle("is-active", btn.dataset.mode === mode)), hidePopup(), refreshBuildBar();
+  }
+  modeButtons.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
+  function deleteChat() {
+    abortRun();
+    let oldId = activeSession?.id;
+    if (browseBotLibraryLLM.clearData(), activeSession = newSession(PREFS2.libraryMode), activeSavedLength = 0, state.pendingRefs = [], renderChips(), renderHistory(), oldId)
+      deleteSession(oldId).catch((e) => PREFS2.debugError("Failed to delete chat session:", e));
+  }
+  function newChat() {
+    abortRun(), persistSession(), browseBotLibraryLLM.clearData(), activeSession = newSession(PREFS2.libraryMode), activeSavedLength = 0, state.pendingRefs = [], renderChips(), renderHistory();
+  }
+  deleteBtn.addEventListener("click", () => {
+    deleteChat(), input.focus();
+  }), sessionsBtn.addEventListener("mousedown", (e) => e.preventDefault()), sessionsBtn.addEventListener("click", () => {
+    input.focus(), openSessionsPopup();
+  }), ui.querySelector('[data-action="settings"]').addEventListener("click", () => SettingsModal.show()), attachChatMessageHandlers(messagesEl);
+  function hidePopup() {
+    popup.hidden = !0, popup.innerHTML = "", state.popupKind = null, state.popupItems = [], state.popupIndex = 0, state.popupToken = null;
+  }
+  function tokenBeforeCaret() {
+    let caret = input.selectionStart ?? input.value.length, before = input.value.slice(0, caret), slash = before.match(/(^|\s)\/(\w*)$/);
+    if (slash)
+      return { kind: "slash", filter: slash[2].toLowerCase(), start: caret - slash[2].length - 1 };
+    let at = before.match(/(^|\s)@([^@\n]*)$/);
+    if (at)
+      return { kind: "at", filter: at[2].toLowerCase(), start: caret - at[2].length - 1 };
+    return null;
+  }
+  function paintPopupItems() {
+    popup.querySelectorAll(".bb-popup-item").forEach((el, i) => {
+      if (el.classList.toggle("is-active", i === state.popupIndex), i === state.popupIndex)
+        el.scrollIntoView({ block: "nearest" });
+    });
+  }
+  function refreshPopup() {
+    if (state.popupKind === "sessions") {
+      if (/^\/continue/i.test(input.value)) {
+        paintSessionRows(sessionQuery());
+        return;
+      }
+      state.popupKind = null;
+    }
+    let token = tokenBeforeCaret();
+    if (!token) {
+      hidePopup();
+      return;
+    }
+    let items;
+    if (token.kind === "slash") {
+      let isFresh = browseBotLibraryLLM.getHistory().length === 0;
+      items = fuzzyFilterSort(SLASH_ITEMS.filter((item) => {
+        if (item.mode && item.mode === PREFS2.libraryMode)
+          return !1;
+        if ((item.command === "new" || item.command === "delete") && isFresh)
+          return !1;
+        return !0;
+      }), token.filter, (item) => [item.title, item.description, ...item.keywords || []]);
+    } else
+      items = fuzzyFilterSort(listTabs(), token.filter, (t) => [t.title, t.url]).slice(0, 8);
+    if (items.length === 0) {
+      hidePopup();
+      return;
+    }
+    state.popupKind = token.kind, state.popupItems = items, state.popupIndex = 0, state.popupToken = token, popup.innerHTML = "", items.forEach((item, i) => {
+      let isTab = token.kind === "at", el = parseElement(`<div class="bb-popup-item${i === 0 ? " is-active" : ""}" data-index="${i}">
+          ${isTab && item.icon ? `<img class="bb-popup-icon" src="${escapeXmlAttribute(item.icon)}" />` : ""}
+          <span class="bb-popup-title">${escapeXmlAttribute(item.title)}</span>
+          <span class="bb-popup-desc">${escapeXmlAttribute(isTab ? item.url : item.description)}</span>
+        </div>`);
+      if (isTab && item.icon) {
+        let img = el.querySelector(".bb-popup-icon");
+        img?.addEventListener("error", () => img.remove());
+      }
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault(), applyPopupItem(i);
+      }), popup.appendChild(el);
+    }), popup.hidden = !1;
+  }
+  function movePopup(delta) {
+    if (popup.hidden || state.popupItems.length === 0)
+      return;
+    let n = state.popupItems.length;
+    state.popupIndex = (state.popupIndex + delta + n) % n, paintPopupItems();
+  }
+  function applyPopupItem(index = state.popupIndex) {
+    if (state.popupKind === "sessions") {
+      let picked = state.popupItems[index];
+      if (clearInput(), hidePopup(), picked)
+        loadSession(picked);
+      return input.focus(), !0;
+    }
+    let token = state.popupToken || tokenBeforeCaret(), item = state.popupItems[index];
+    if (!token || !item)
+      return !1;
+    let caret = input.selectionStart ?? input.value.length, head = input.value.slice(0, token.start), after = input.value.slice(caret);
+    if (state.popupKind === "slash")
+      if (item.command === "delete" || item.command === "clear")
+        clearInput(), hidePopup(), deleteChat();
+      else if (item.command === "new")
+        clearInput(), hidePopup(), newChat();
+      else if (item.command === "close")
+        clearInput(), hidePopup(), closeLibrary();
+      else if (item.openSessions) {
+        input.value = "/continue ";
+        try {
+          input.setSelectionRange(input.value.length, input.value.length);
+        } catch {}
+        return openSessionsPopup(), !0;
+      } else
+        setMode(item.mode), clearInput();
+    else
+      state.pendingRefs = state.pendingRefs.filter((r) => r.tab !== item.tab), state.pendingRefs.push({ tab: item.tab, title: item.title, url: item.url, icon: item.icon }), input.value = `${head}@${item.title} ${after}`, renderChips(), autogrow();
+    return hidePopup(), input.focus(), !0;
+  }
+  input.addEventListener("input", () => {
+    syncPendingRefs(), autogrow(), refreshPopup();
+  }), input.addEventListener("click", refreshPopup), input.addEventListener("blur", () => setTimeout(hidePopup, 150)), input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (e.preventDefault(), e.stopPropagation(), !popup.hidden)
+        hidePopup();
+      else if (input.value)
+        clearInput(), state.pendingRefs = [], renderChips();
+      else
+        closeLibrary();
+      return;
+    }
+    if (!popup.hidden) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault(), movePopup(1);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault(), movePopup(-1);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault(), applyPopupItem();
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey)
+      e.preventDefault(), handleSend();
+  });
+  function setStreaming(streaming) {
+    state.streaming = streaming, setStreamingControls({ sendBtn, stopBtn }, streaming, focusPrompt);
+  }
+  let onRunEnd = () => {
+    setStreaming(!1), refreshBuildBar(), scrollDown();
+  };
+  libraryRunEndListeners.add(onRunEnd), sendBtn.addEventListener("click", handleSend), stopBtn.addEventListener("click", () => {
+    state.abortController?.abort(), libraryRunController?.abort();
+  });
+  function createLoadingIndicator() {
+    return parseElement(`<div class="chat-message chat-message-loading"><div class="message-content">${icons.toolLoading}Thinking…</div></div>`);
+  }
+  async function resolveRefs(text) {
+    let refs = [];
+    for (let pending of state.pendingRefs) {
+      if (!text.includes(`@${pending.title}`))
+        continue;
+      let page = await messageManagerAPI.getPageTextContentForTab(pending.tab).catch(() => null);
+      refs.push({
+        title: pending.title,
+        url: page?.url || pending.url,
+        icon: pending.icon || "",
+        text: page?.textContent?.trim() ? page.textContent : "(No readable text extracted from this tab.)"
+      });
+    }
+    return refs;
+  }
+  async function handleSend() {
+    let text = input.value.trim(), command = text.match(/^\/(clear|delete|new|close)\s*$/i);
+    if (command) {
+      clearInput(), hidePopup();
+      let name = command[1].toLowerCase();
+      if (name === "clear" || name === "delete")
+        deleteChat(), focusPrompt();
+      else if (name === "new")
+        newChat(), focusPrompt();
+      else
+        closeLibrary();
+      return;
+    }
+    if (/^\/continue\s*$/i.test(text)) {
+      clearInput(), hidePopup(), openSessionsPopup();
+      return;
+    }
+    if (!text || state.streaming || libraryRunController)
+      return;
+    let slash = text.match(/^\/(\w+)\s*([\s\S]*)$/);
+    if (slash && MODES.includes(slash[1].toLowerCase())) {
+      setMode(slash[1].toLowerCase());
+      let rest = slash[2].trim();
+      if (clearInput(), hidePopup(), !rest) {
+        focusPrompt();
+        return;
+      }
+      text = rest;
+    }
+    state.abortController = new AbortController, libraryRunController = state.abortController, libraryRunHost = parseElement('<div class="bb-run-view"></div>'), setStreaming(!0);
+    let refs = [];
+    try {
+      refs = await resolveRefs(text);
+    } catch (e) {
+      PREFS2.debugError("Failed to resolve tab refs:", e);
+    }
+    let prompt = text;
+    for (let ref of refs)
+      prompt = prompt.split(`@${ref.title}`).join(ref.title);
+    addMessage("user", text, refs), deleteBtn.hidden = !1, clearInput(), state.pendingRefs = [], renderChips(), hidePopup(), messagesEl.appendChild(libraryRunHost);
+    let aiWrap = parseElement(`<div class="chat-message chat-message-ai">
+        <div class="message-content"><div class="markdown-body"></div></div>
+      </div>`), contentDiv = aiWrap.querySelector(".markdown-body");
+    attachMessageActions(aiWrap, { onRegenerate: handleRegenerate }), libraryRunHost.appendChild(aiWrap), scrollDown();
+    let bursts = [], burst = null, toolGen = 0, runLoadingIndicator = null, shownGen = 0, segmentText = "", fmtSecs = (ms) => `${(ms / 1000).toFixed(1)}s`, ensureBurst = () => {
+      if (!burst) {
+        if (burst = { ...buildToolRunBox(), count: 0, done: 0, start: Date.now(), activeRow: null, log: [] }, libraryRunHost.appendChild(burst.box), runLoadingIndicator?.parentNode)
+          runLoadingIndicator.remove();
+        runLoadingIndicator = null;
+      }
+      return burst;
+    }, burstTitle = (b) => `Used ${b.count} tool${b.count === 1 ? "" : "s"}` + (b.start ? ` · ${fmtSecs(Date.now() - b.start)}` : ""), refreshBurstTitle = (b) => {
+      if (!b || !b.title)
+        return;
+      let pending = b.count - b.done;
+      if (b.box.dataset.state = pending > 0 ? "working" : "done", setStatusIcon(b.box.querySelector(".bb-tool-run-status"), pending > 0 ? "loading" : "success"), pending > 0) {
+        let current = b.activeRow?.dataset.label;
+        if (!current && b.rows) {
+          let loading = b.rows.querySelectorAll('.bb-tool-row[data-status="loading"]');
+          current = loading.length ? loading[loading.length - 1].dataset.label : null;
+        }
+        b.title.textContent = `${current || "Working"}…${b.start ? ` · ${fmtSecs(Date.now() - b.start)}` : ""}`;
+      } else
+        b.title.textContent = burstTitle(b);
+    }, finalizeBurst = () => {
+      if (!burst)
+        return;
+      if (burst.count > 0)
+        burst.elapsed = fmtSecs(Date.now() - burst.start), burst.title.textContent = `Used ${burst.count} tool${burst.count === 1 ? "" : "s"} · ${burst.elapsed}`, bursts.push(burst);
+      else
+        burst.box.remove();
+      burst = null;
+    }, startSegment = () => {
+      finalizeBurst(), aiWrap = parseElement(`<div class="chat-message chat-message-ai">
+          <div class="message-content"><div class="markdown-body"></div></div>
+        </div>`), contentDiv = aiWrap.querySelector(".markdown-body"), attachMessageActions(aiWrap, { onRegenerate: handleRegenerate }), libraryRunHost.appendChild(aiWrap), shownGen = toolGen, segmentText = "";
+    }, updateToolCallUI = (toolName, status, error = null, args = null, result = null) => {
+      toolGen++;
+      let b = ensureBurst(), row, resultText = "";
+      if (status === "loading") {
+        b.count++;
+        try {
+          let built = buildToolRow({
+            status,
+            tool: toolName,
+            label: toolVerb(toolName, status, args),
+            argsText: toolArgsPreview(args)
+          });
+          row = built.row, row.dataset.tool = toolName, row.dataset.label = toolVerb(toolName, "loading", args), row._startedAt = Date.now(), row._argsText = toolArgsPreview(args), row._detail = built.detail, b.rows.appendChild(row), b.rows.appendChild(built.detail), b.activeRow = row;
+        } catch (e) {
+          PREFS2.debugError(`tool-run: loading row failed for '${toolName}':`, e);
+          return;
+        }
+      } else {
+        if (row = b.activeRow?.dataset.tool === toolName ? b.activeRow : [...b.rows.querySelectorAll(".bb-tool-row")].reverse().find((el) => el.dataset.tool === toolName && el.dataset.status === "loading") || b.activeRow, !row) {
+          PREFS2.debugError(`tool-run: no row for '${toolName}' -> ${status}`);
+          return;
+        }
+        b.done++;
+        let secs = fmtSecs(Date.now() - (row._startedAt || Date.now()));
+        if (row.querySelector(".bb-tool-row-time").textContent = secs, resultText = error ? `Error: ${typeof error === "string" ? error : error?.message || "failed"}` : snapshotToolResult(result), resultText)
+          row._detail.innerHTML = highlightResult(toolName, row._argsText, resultText);
+        row._secs = secs, b.activeRow = null;
+      }
+      if (row.dataset.tool = toolName, row.dataset.status = status, row.dataset.label = toolVerb(toolName, "loading", args), row.querySelector(".bb-tool-row-label").textContent = toolVerb(toolName, status, args), setStatusIcon(row.querySelector(".bb-tool-row-icon"), status), status !== "loading")
+        b.log.push({
+          status,
+          tool: toolName,
+          label: row.querySelector(".bb-tool-row-label").textContent,
+          argsText: row._argsText || "",
+          resultText,
+          secs: row._secs || ""
+        });
+      refreshBurstTitle(b), scrollDown();
+    }, notifyText = "BrowseBot finished responding.";
+    try {
+      let resultPromise = browseBotLibraryLLM.sendMessage(prompt, {
+        refs,
+        abortSignal: state.abortController.signal,
+        confirmTool: (names, detail) => createToolConfirmationDialog(names, detail),
+        onToolStatus: updateToolCallUI
+      });
+      if (!PREFS2.streamEnabled) {
+        let loadingIndicator = createLoadingIndicator();
+        runLoadingIndicator = loadingIndicator, libraryRunHost.appendChild(loadingIndicator), scrollDown();
+        try {
+          let result = await resultPromise;
+          if (loadingIndicator.parentNode)
+            loadingIndicator.remove();
+          if (isProviderBalanceExhausted(browseBotLibraryLLM.currentProvider, result.text))
+            contentDiv.appendChild(parseMD(`${result.text}
+
+*Pollinations ran out of free credits. Add a free API key in BrowseBot settings, then try again.*`));
+          else if (result.text.trim() === "" && toolGen > 0)
+            contentDiv.appendChild(parseMD("*(Tool actions performed)*"));
+          else if (result.text.trim() === "")
+            aiWrap.remove();
+          else
+            contentDiv.appendChild(parseMD(result.text));
+        } finally {
+          if (loadingIndicator.parentNode)
+            loadingIndicator.remove();
+          scrollDown();
+        }
+      } else {
+        let loadingIndicator = createLoadingIndicator();
+        runLoadingIndicator = loadingIndicator, libraryRunHost.appendChild(loadingIndicator), scrollDown();
+        let result = await resultPromise;
+        try {
+          for await (let delta of result.textStream) {
+            if (loadingIndicator.parentNode)
+              loadingIndicator.remove();
+            if (toolGen !== shownGen)
+              startSegment();
+            segmentText += delta, renderStreamText(contentDiv, segmentText), scrollDown();
+          }
+          try {
+            let finalText = await result.text;
+            if (typeof finalText === "string")
+              segmentText = finalText;
+          } catch (e) {
+            PREFS2.debugError("Failed to resolve final stream text:", e.message);
+          }
+          if (renderStreamText(contentDiv, segmentText), isProviderBalanceExhausted(browseBotLibraryLLM.currentProvider, segmentText))
+            contentDiv.appendChild(parseMD(`
+
+*Pollinations ran out of free credits. Add a free API key in BrowseBot settings, then try again.*`));
+          else if (segmentText.trim() === "" && toolGen > 0)
+            contentDiv.innerHTML = "", contentDiv.appendChild(parseMD("*(Tool actions performed)*"));
+          else if (segmentText.trim() === "")
+            aiWrap.remove();
+        } finally {
+          if (loadingIndicator.parentNode)
+            loadingIndicator.remove();
+        }
+      }
+    } catch (e) {
+      if (e?.name === "AbortError")
+        if (PREFS2.debugLog("Streaming aborted by user."), notifyText = "BrowseBot stopped.", contentDiv.textContent.trim())
+          contentDiv.appendChild(parseMD("_Stopped_"));
+        else
+          aiWrap.remove();
+      else
+        PREFS2.debugError("Library send failed:", e), notifyText = `BrowseBot failed: ${extractErrorText(e).slice(0, 160)}`, aiWrap.remove(), addMessage("error", extractErrorText(e));
+    } finally {
+      if (libraryRunController === state.abortController)
+        libraryRunController = null;
+      let finishedHost = libraryRunHost;
+      libraryRunHost = null;
+      let browseBotVisible = isBrowseBotVisible();
+      if (notifyText && !browseBotVisible)
+        try {
+          showToast({
+            title: notifyText,
+            description: prompt.slice(0, 50),
+            preset: 2,
+            buttonText: "Open",
+            timeout: 8000,
+            onClick: () => browseBotLibrary.open()
+          });
+        } catch {}
+      if (!state.destroyed) {
+        if (setStreaming(!1), finishedHost?.parentElement === messagesEl)
+          finishedHost.replaceWith(...finishedHost.childNodes);
+      }
+      if (state.abortController = null, finalizeBurst(), bursts.length > 0) {
+        let session = getActiveSession();
+        if (!Array.isArray(session.toolRuns))
+          session.toolRuns = [];
+        let seen = visibleSessionMessages(browseBotLibraryLLM.getHistory()), afterUser = -1;
+        seen.forEach((m, i) => {
+          if (m.role === "user")
+            afterUser = i;
+        }), bursts.forEach((b, i) => {
+          session.toolRuns.push({ afterUser, burst: i, elapsed: b.elapsed, tools: b.log });
+        });
+      }
+      persistSession(), broadcastRunEnd(), refreshBuildBar(), scrollDown();
+    }
+  }
+  if (renderHistory(), attachRunHost(), refreshBuildBar(), libraryRunController)
+    state.abortController = libraryRunController, setStreaming(!0);
+  if (!host.hidden)
+    setLibraryWidth(host);
+  try {
+    let libHost = libraryHostOf(host);
+    if (libHost)
+      ensureTabPatched(libHost);
+  } catch {}
+  host.appendChild(ui);
+  let settle = () => {
+    if (host.hidden)
+      return;
+    scrollDown();
+    try {
+      if (host.isConnected && !ui.contains(document.activeElement))
+        input.focus();
+    } catch {}
+  };
+  host._bbReactivate = () => {
+    if (!host.isConnected)
+      return;
+    if (state.destroyed = !1, libraryRunEndListeners.add(onRunEnd), renderHistory(), attachRunHost(), refreshBuildBar(), libraryRunController)
+      state.abortController = libraryRunController, setStreaming(!0);
+    setLibraryWidth(host), settle();
+  }, host._bbShow = () => {
+    if (!host.isConnected)
+      return;
+    if (state.destroyed = !1, libraryRunEndListeners.add(onRunEnd), renderHistory(), attachRunHost(), refreshBuildBar(), libraryRunController)
+      state.abortController = libraryRunController, setStreaming(!0);
+    setLibraryWidth(host), settle();
+  }, host._bbHide = () => {
+    clearLibraryWidth(host);
+  }, requestAnimationFrame(() => {
+    settle(), setTimeout(settle, 150), setTimeout(settle, 400);
+  });
+}
+
+class BrowseBotLibrarySectionElement extends HTMLElement {
+  constructor() {
+    super();
+    this._mounted = !1, this._library = null;
+  }
+  set library(value) {
+    this._library = value;
+  }
+  get library() {
+    return this._library;
+  }
+  static get observedAttributes() {
+    return ["hidden"];
+  }
+  attributeChangedCallback(name) {
+    if (name !== "hidden")
+      return;
+    try {
+      if (this.hasAttribute("hidden"))
+        this._bbHide?.();
+      else
+        this._bbShow?.();
+    } catch {}
+  }
+  onShown() {
+    try {
+      this._bbShow?.();
+    } catch {}
+  }
+  onHidden() {
+    try {
+      this._bbHide?.();
+    } catch {}
+  }
+  connectedCallback() {
+    if (this._mounted) {
+      try {
+        this._bbReactivate?.();
+      } catch {}
+      return;
+    }
+    this._mounted = !0;
+    try {
+      this.classList.add("zen-library-section");
+    } catch {}
+    try {
+      this.dataset.section = "browsebot";
+    } catch {}
+    try {
+      mountPanel(this);
+    } catch (e) {
+      PREFS2.debugError("BrowseBot library mount failed:", e);
+    }
+  }
+  disconnectedCallback() {
+    try {
+      this._bbCleanup?.();
+    } catch {}
+  }
+}
+if (!customElements.get("zen-library-browsebot-section"))
+  try {
+    customElements.define("zen-library-browsebot-section", BrowseBotLibrarySectionElement);
+  } catch (e) {
+    PREFS2.debugError("Failed to define library section element:", e);
+  }
+
+class BrowseBotLibrarySection {
+  static render(library) {
+    try {
+      let html = getLitHtml();
+      if (html)
+        return html`<zen-library-browsebot-section
+          class="zen-library-section"
+          data-section="browsebot"
+          .library=${library}></zen-library-browsebot-section>`;
+    } catch {}
+    let el = document.createElement("zen-library-browsebot-section");
+    try {
+      el.library = library;
+    } catch {}
+    return el;
+  }
+}
+BrowseBotLibrarySection.id = "browsebot";
+BrowseBotLibrarySection.label = "library-browsebot-section-title";
+window.ZenLibraryBrowseBotSection = BrowseBotLibrarySection;
+var observedHosts = /* @__PURE__ */ new WeakSet, libraryObserver = null;
+function aiIconNode() {
+  try {
+    let node = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24">
+	<path d="M0 0h24v24H0z" fill="none" />
+	<path class="bb-library-tab-icon-shape" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.427 8.084C12.801 5.843 12.323 4 11 4S9.2 5.843 8.573 8.084c-.254.91-.382 1.366-.753 1.737c-.37.37-.826.498-1.736.752C3.843 11.2 2 11.677 2 13s1.843 1.8 4.084 2.427c.91.254 1.366.381 1.736.752c.371.371.499.826.753 1.737C9.2 20.157 9.678 22 11 22s1.8-1.843 2.427-4.084c.255-.91.382-1.366.753-1.737c.37-.37.826-.498 1.736-.752C18.157 14.8 20 14.323 20 13s-1.843-1.8-4.084-2.427c-.91-.254-1.366-.382-1.736-.752c-.371-.371-.498-.826-.753-1.737M19.5 2.938V4.5m0 0v1.563m0-1.563h-1.25m1.25 0h1.25m1.25 0l-.452-.15c-.698-.233-1.047-.35-1.298-.6c-.25-.25-.367-.6-.6-1.298L19.5 2l-.15.452c-.233.698-.35 1.047-.6 1.298c-.25.25-.6.367-1.298.6L17 4.5l.452.15c.698.233 1.047.35 1.298.6c.25.25.367.6.6 1.298L19.5 7l.15-.452c.233-.698.35-1.047.6-1.298c.25-.25.6-.367 1.298-.6z" />
+</svg>`, "image/svg+xml").documentElement;
+    if (!node || node.localName !== "svg")
+      return null;
+    return node.removeAttribute("xmlns"), node.setAttribute("class", "bb-library-tab-icon"), node;
+  } catch {
+    return null;
+  }
+}
+function findSectionTab(host) {
+  try {
+    return (host.shadowRoot || host)?.querySelector?.('.zen-library-tab[data-section="browsebot"]') || null;
+  } catch {
+    return null;
+  }
+}
+function patchTab(host) {
+  let tab = findSectionTab(host);
+  if (!tab)
+    return !1;
+  try {
+    let label = tab.querySelector?.("label");
+    if (label && label.textContent !== "AI")
+      label.textContent = "AI", label.removeAttribute("data-l10n-id");
+    let iconBox = tab.querySelector?.(".zen-library-tab-icon");
+    if (iconBox && !iconBox.querySelector(".bb-library-tab-icon")) {
+      let icon = aiIconNode();
+      if (icon)
+        iconBox.replaceChildren(icon);
+    }
+    let labelDone = !tab.querySelector?.("label") || tab.querySelector("label").textContent === "AI", iconDone = !tab.querySelector?.(".zen-library-tab-icon") || !!tab.querySelector(".zen-library-tab-icon").querySelector(".bb-library-tab-icon");
+    return !!(labelDone && iconDone);
+  } catch {
+    return !1;
+  }
+}
+function ensureTabPatched(host, attempts = 40) {
+  try {
+    if (patchTab(host))
+      return;
+  } catch {}
+  if (attempts > 0)
+    setTimeout(() => {
+      try {
+        if (host.isConnected)
+          ensureTabPatched(host, attempts - 1);
+      } catch {}
+    }, 250);
+}
+function ensureSection(host) {
+  if (!host?.isConnected)
+    return !1;
+  observeHost(host);
+  let sections = host.zenLibrarySections;
+  if (!sections || typeof sections !== "object")
+    return !1;
+  if (!PREFS2.libraryEnabled) {
+    if (sections.browsebot === BrowseBotLibrarySection) {
+      if (delete sections.browsebot, host.activeTab === "browsebot")
+        host.activeTab = "history";
+      try {
+        host.requestUpdate?.();
+      } catch {}
+      return !0;
+    }
+    return !1;
+  }
+  let changed = !1;
+  if (sections.browsebot !== BrowseBotLibrarySection)
+    sections.browsebot = BrowseBotLibrarySection, changed = !0;
+  if (ensureTabPatched(host), changed)
+    try {
+      host.requestUpdate?.();
+    } catch {}
+  return changed;
+}
+function observeHost(host) {
+  let root = null;
+  try {
+    root = host.shadowRoot || host;
+  } catch {
+    return;
+  }
+  if (host._bbObservedRoot === root)
+    return;
+  host._bbObservedRoot = root;
+  let queued = !1, observer = new MutationObserver(() => {
+    if (queued)
+      return;
+    queued = !0, requestAnimationFrame(() => {
+      queued = !1, ensureSection(host);
+    });
+  });
+  try {
+    observer.observe(root, { childList: !0, subtree: !0 });
+  } catch {
+    host._bbObservedRoot = null;
+  }
+}
+function attachHost(host) {
+  if (!host)
+    return;
+  if (!observedHosts.has(host))
+    observedHosts.add(host);
+  ensureSection(host);
+}
+function connectExistingHosts() {
+  let hosts = [];
+  try {
+    hosts = Array.from(document.querySelectorAll?.("zen-library") || []);
+  } catch {
+    hosts = [];
+  }
+  for (let host of hosts)
+    attachHost(host);
+}
+function watchForHosts() {
+  if (connectExistingHosts(), libraryObserver)
+    return;
+  libraryObserver = new MutationObserver(connectExistingHosts);
+  try {
+    libraryObserver.observe(document.documentElement, { childList: !0, subtree: !0 });
+  } catch {
+    libraryObserver = null;
+  }
+}
+function hasLibraryFeature() {
+  try {
+    return !!(document.querySelector("zen-library") || customElements.get("zen-library") || document.getElementById("zen-library-button"));
+  } catch {
+    return !1;
+  }
+}
+function libraryCtor() {
+  try {
+    return customElements.get("zen-library") || null;
+  } catch {
+    return null;
+  }
+}
+function isLibraryOpen() {
+  try {
+    let Ctor = libraryCtor();
+    if (Ctor && typeof Ctor.isLibraryOpen === "boolean")
+      return Ctor.isLibraryOpen;
+    if (typeof window.gZenLibrary?._isOpen === "boolean")
+      return window.gZenLibrary._isOpen;
+    let host = document.querySelector("zen-library");
+    if (host && !host.hidden) {
+      let cs = getComputedStyle(host);
+      if (cs.display !== "none" && cs.visibility !== "hidden")
+        return !0;
+    }
+  } catch {}
+  return !1;
+}
+function isBrowseBotVisible() {
+  try {
+    let h = document.querySelector("zen-library");
+    return !!h && isLibraryOpen() && h.activeTab === "browsebot";
+  } catch {
+    return !1;
+  }
+}
+function clickLibraryButton() {
+  try {
+    return document.getElementById("zen-library-button")?.click?.(), !0;
+  } catch {
+    return !1;
+  }
+}
+function setSectionTab() {
+  try {
+    let h = document.querySelector("zen-library");
+    if (!h)
+      return !1;
+    if (ensureSection(h), !h.zenLibrarySections?.browsebot)
+      return !1;
+    if (h.activeTab !== "browsebot")
+      h.activeTab = "browsebot";
+    return h.requestUpdate?.(), !0;
+  } catch {
+    return !1;
+  }
+}
+function setSectionTabSoon() {
+  let attempts = 15, tick = () => {
+    if (setSectionTab())
+      return;
+    if (--attempts > 0)
+      setTimeout(tick, 100);
+    else
+      PREFS2.debugLog("Library: gave up setting section tab, host or section missing.");
+  };
+  tick();
+}
+function closeLibrary() {
+  try {
+    if (typeof window.gZenLibrary?.close === "function")
+      return window.gZenLibrary.close(), !0;
+  } catch {}
+  return clickLibraryButton();
+}
+function showLibraryMissing() {
+  try {
+    showToast({
+      title: "Zen Library not available",
+      description: "BrowseBot Library needs a Zen version with the Library feature."
+    });
+  } catch {}
+  return !1;
+}
+function initBrowseBotLibrary() {
+  if (PREFS2.debugLog("Library: init."), !customElements.get("zen-library"))
+    try {
+      customElements.whenDefined("zen-library").then(watchForHosts).catch(() => {});
+    } catch {}
+  else
+    watchForHosts();
+  addPrefListener(PREFS2.LIBRARY_ENABLED, () => connectExistingHosts());
+}
+var browseBotLibrary = {
+  get enabled() {
+    return PREFS2.libraryEnabled;
+  },
+  get mode() {
+    return PREFS2.libraryMode;
+  },
+  setMode(mode) {
+    PREFS2.libraryMode = mode;
+  },
+  toggle() {
+    if (!PREFS2.libraryEnabled)
+      return !1;
+    try {
+      connectExistingHosts();
+    } catch {}
+    try {
+      let host = document.querySelector("zen-library"), open = isLibraryOpen();
+      if (PREFS2.debugLog(`Library: toggle, open=${open}, tab=${host?.activeTab}.`), open && host?.activeTab === "browsebot")
+        return PREFS2.debugLog("Library: toggle closing."), closeLibrary();
+      return this.open();
+    } catch (e) {
+      PREFS2.debugError("Could not toggle Zen Library:", e);
+    }
+    return showLibraryMissing();
+  },
+  open() {
+    if (!PREFS2.libraryEnabled)
+      return !1;
+    try {
+      connectExistingHosts();
+    } catch {}
+    try {
+      let host = document.querySelector("zen-library"), open = isLibraryOpen();
+      if (PREFS2.debugLog(`Library: open, open=${open}, tab=${host?.activeTab}.`), open && host?.activeTab === "browsebot")
+        return !0;
+      if (!open && !hasLibraryFeature())
+        return showLibraryMissing();
+      if (!open)
+        clickLibraryButton();
+      return setSectionTabSoon(), !0;
+    } catch (e) {
+      PREFS2.debugError("Could not open Zen Library:", e);
+    }
+    return showLibraryMissing();
+  }
+};
+window.browseBotLibrary = browseBotLibrary;
+
+// findbar-ai/index.js
+init_prefs();
+
 // utils/startup-finish.js
 function startupFinish(callback) {
   if (document.readyState === "complete")
@@ -4098,6 +8939,9 @@ function startupFinish(callback) {
   else
     window.addEventListener("load", callback, { once: !0 });
 }
+
+// findbar-ai/index.js
+init_pref();
 
 // utils/command-palete.js
 function addCommands(commands, retryCount = 0) {
@@ -4108,6 +8952,7 @@ function addCommands(commands, retryCount = 0) {
 }
 
 // findbar-ai/index.js
+var settingsTabById = (id) => SETTINGS_TABS.find((tab) => tab.id === id);
 function setupCommandPaletteIntegration() {
   addCommands([
     {
@@ -4123,10 +8968,17 @@ function setupCommandPaletteIntegration() {
     {
       key: "browsebot:settings",
       label: "Open BrowseBot Settings",
-      command: () => SettingsModal.show(),
-      icon: "chrome://global/skin/icons/settings.svg",
+      command: () => SettingsModal.show("general"),
+      icon: settingsTabById("general")?.icon || "chrome://global/skin/icons/settings.svg",
       tags: ["AI", "BrowseBot", "Settings"]
     },
+    ...SETTINGS_TABS.map((tab) => ({
+      key: `browsebot:settings-${tab.id}`,
+      label: `Open BrowseBot Settings: ${tab.label}`,
+      command: () => SettingsModal.show(tab.id),
+      icon: tab.icon,
+      tags: ["AI", "BrowseBot", "Settings", tab.label, tab.id]
+    })),
     {
       key: "browsebot:urlbarAi",
       label: "Toggle URL bar AI mode",
@@ -4142,6 +8994,14 @@ function setupCommandPaletteIntegration() {
       condition: () => PREFS2.enabled,
       icon: "chrome://global/skin/icons/highlights.svg",
       tags: ["AI", "BrowseBot", "findbar"]
+    },
+    {
+      key: "browsebot:open-library",
+      label: "Toggle BrowseBot Library",
+      command: () => browseBotLibrary.toggle(),
+      condition: () => PREFS2.libraryEnabled,
+      icon: "chrome://global/skin/icons/highlights.svg",
+      tags: ["AI", "BrowseBot", "Library"]
     }
   ]);
 }
@@ -4159,14 +9019,29 @@ function registerFindbarShortcut(value = PREFS2.shortcutFindbar) {
     browseBotFindbar.expanded = !browseBotFindbar.expanded;
   }), initShortcutRegistry();
 }
-function setupShortcuts() {
-  registerFindbarShortcut(), registerUrlBarShortcut(), addPrefListener(PREFS2.SHORTCUT_URLBAR, (val) => registerUrlBarShortcut(val.value)), addPrefListener(PREFS2.SHORTCUT_FINDBAR, (val) => registerFindbarShortcut(val.value));
+function registerLibraryShortcut(value = PREFS2.shortcutLibrary) {
+  if (!PREFS2.libraryEnabled)
+    return;
+  registerShortcut(value, "toggle-browsebot-library", () => {
+    browseBotLibrary.toggle();
+  }), initShortcutRegistry();
 }
-function init() {
+function setupShortcuts() {
+  registerFindbarShortcut(), registerUrlBarShortcut(), registerLibraryShortcut(), addPrefListener(PREFS2.SHORTCUT_URLBAR, (val) => registerUrlBarShortcut(val.value)), addPrefListener(PREFS2.SHORTCUT_FINDBAR, (val) => registerFindbarShortcut(val.value)), addPrefListener(PREFS2.SHORTCUT_LIBRARY, (val) => registerLibraryShortcut(val.value));
+}
+async function init() {
+  try {
+    await ensureApiKeysLoaded();
+  } catch (e) {
+    PREFS2.debugError("Could not load encrypted API keys:", e);
+  }
   browseBotFindbar.init(), addPrefListener(PREFS2.ENABLED, (val) => {
     browseBotFindbar.handleEnabledChange(val), registerFindbarShortcut();
   }), window.browseBotFindbar = browseBotFindbar, urlbarAI.init(), addPrefListener(PREFS2.URLBAR_AI_ENABLED, (val) => {
     urlbarAI.handlePrefChange(), registerUrlBarShortcut(val);
+  }), initBrowseBotLibrary(), addPrefListener(PREFS2.LIBRARY_ENABLED, (val) => {
+    if (val.value)
+      registerLibraryShortcut();
   }), setupShortcuts(), setupCommandPaletteIntegration();
 }
 startupFinish(init);

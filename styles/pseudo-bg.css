@@ -8,7 +8,7 @@
       align-self: center !important;
       z-index: 1 !important;
       content: "" !important;
-      background-color: var(--acrylic-bg) !important;
+      background-color: var(--zenux-bg) !important;
       top: calc(var(--findbar-y) - 38px) !important;
       left: calc(var(--findbar-x) - var(--zen-sidebar-width)) !important;
       width: var(--findbar-width) !important;
@@ -65,17 +65,17 @@
     }
   }
 
-  #ai-settings-modal-overlay,
+  .zenux-settings-overlay:has(.browse-bot-settings-modal),
   .tool-confirmation-dialog {
     &::before {
       position: absolute !important;
       align-self: center !important;
       content: "" !important;
-      background-color: var(--acrylic-bg) !important;
+      background-color: var(--zenux-bg) !important;
       visibility: visible;
       transition: none !important;
       opacity: 1 !important;
-      border-radius: var(--acrylic-radius) !important;
+      border-radius: var(--zenux-radius-l) !important;
     }
   }
 
@@ -85,11 +85,9 @@
     height: 100px;
   }
 
-  #ai-settings-modal-overlay::before {
-    width: 500px;
-    min-width: 500px;
-    max-width: 90vw;
+  .zenux-settings-overlay:has(.browse-bot-settings-modal)::before {
+    width: 620px;
+    max-width: 92vw;
     height: 80vh;
-    padding: 20px 0px 0px 20px;
   }
 }

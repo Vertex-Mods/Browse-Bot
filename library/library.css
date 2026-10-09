@@ -1,0 +1,756 @@
+/* Sidebar tab glyph, colored like the native sections: stroke only when
+   idle, filled when selected. */
+.zen-library-tab[data-section="browsebot"] {
+  .bb-library-tab-icon {
+    width: 24px !important;
+    height: 24px !important;
+    display: block !important;
+    color: light-dark(var(--zen-colors-primary), var(--zen-accent-button-color)) !important;
+
+    .bb-library-tab-icon-shape {
+      fill: transparent !important;
+    }
+  }
+
+  &[active] {
+    .bb-library-tab-icon {
+      .bb-library-tab-icon-shape {
+        fill: color-mix(in srgb, currentColor, light-dark(white, black) 60%) !important;
+      }
+    }
+  }
+}
+
+zen-library-browsebot-section {
+  display: flex;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-height: 0 !important;
+
+  .bb-library {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    gap: 10px !important;
+    padding: 14px 6px 14px 16px !important;
+    box-sizing: border-box !important;
+    color: var(--zenux-text) !important;
+    font-family: var(--zenux-font) !important;
+    -moz-window-dragging: no-drag !important;
+
+    .bb-library-header {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      flex-shrink: 0 !important;
+      padding-right: 10px !important;
+
+      .bb-mode-switch {
+        display: flex !important;
+        flex: none !important;
+        width: 200px !important;
+        gap: 2px !important;
+        padding: 3px !important;
+        border-radius: var(--zenux-radius-m) !important;
+        background: var(--zenux-surface) !important;
+        border: 1px solid var(--zenux-border) !important;
+
+        .bb-mode {
+          flex: 1 !important;
+          border: 1px solid transparent !important;
+          background: transparent !important;
+          color: var(--zenux-muted) !important;
+          font: inherit !important;
+          font-size: 12px !important;
+          font-weight: 600 !important;
+          padding: 5px 4px !important;
+          border-radius: var(--zenux-radius-s) !important;
+          cursor: pointer !important;
+          text-align: center !important;
+
+          &:hover {
+            color: var(--zenux-text) !important;
+            background: var(--zenux-surface-hover) !important;
+          }
+
+          &.is-active {
+            background-color: var(--zenux-accent-solid) !important;
+            border-color: transparent !important;
+            color: white !important;
+          }
+        }
+      }
+
+      .bb-header-actions {
+        display: flex !important;
+        gap: 2px !important;
+        margin-left: auto !important;
+
+        [hidden] {
+          display: none !important;
+        }
+      }
+    }
+
+    .bb-library-messages {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 12px !important;
+      flex: 1 !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      scrollbar-width: thin !important;
+      padding: 10px 8px 14px 2px !important;
+
+      .bb-run-view {
+        display: contents !important;
+      }
+
+      .chat-message {
+        max-width: 85% !important;
+        padding: 1px 5px !important;
+        border-radius: 10px !important;
+        word-wrap: break-word !important;
+        font-size: 14px !important;
+        position: relative !important;
+        display: flex !important;
+        flex-direction: column !important;
+        user-select: text !important;
+      }
+
+      .chat-message-user {
+        align-self: flex-end !important;
+        background: var(--zenux-accent-soft) !important;
+        border: 1px solid var(--zenux-accent-border) !important;
+        color: var(--zenux-text) !important;
+        border-bottom-right-radius: 4px !important;
+        padding: 6px 10px !important;
+        font-weight: 500 !important;
+        white-space: pre-wrap !important;
+      }
+
+      .chat-message-ai {
+        max-width: 100% !important;
+        align-self: stretch !important;
+        padding: 1px 0 !important;
+
+        .message-content {
+          user-select: text !important;
+        }
+      }
+
+      .chat-message-error {
+        align-self: flex-start !important;
+        max-width: 100% !important;
+        background: var(--zenux-danger-bg) !important;
+        color: var(--zenux-danger) !important;
+        padding: 6px 10px !important;
+        white-space: pre-wrap !important;
+      }
+
+      .chat-message-loading {
+        align-self: flex-start !important;
+        width: 60% !important;
+
+        .message-content {
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+          color: var(--zenux-muted) !important;
+          font-size: 13px !important;
+          animation: pulse 1.6s var(--zenux-ease) infinite !important;
+
+          svg {
+            width: 14px !important;
+            height: 14px !important;
+            flex-shrink: 0 !important;
+            animation: spin 0.8s linear infinite !important;
+          }
+        }
+      }
+
+      .bb-msg-actions {
+        position: absolute !important;
+        bottom: -12px !important;
+        right: 10px !important;
+        display: flex !important;
+        gap: 2px !important;
+        padding: 1px !important;
+        background: var(--zenux-surface) !important;
+        border: 1px solid var(--zenux-border) !important;
+        border-radius: var(--zenux-radius-pill) !important;
+        box-shadow: var(--zenux-shadow-s) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity 0.15s var(--zenux-ease) !important;
+        z-index: 2 !important;
+
+        .zenux-icon-btn {
+          min-width: 20px !important;
+          min-height: 20px !important;
+          padding: 1px !important;
+
+          img {
+            width: 14px !important;
+            height: 14px !important;
+          }
+        }
+      }
+
+      .chat-message:hover > .bb-msg-actions,
+      .chat-message:focus-within > .bb-msg-actions {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+
+      /* Inline approval card; overrides the fixed modal styling from settings.css. */
+      .tool-confirmation-dialog {
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
+        background: none !important;
+        backdrop-filter: none !important;
+        display: block !important;
+        z-index: auto !important;
+        align-self: stretch !important;
+      }
+
+      .tool-confirmation-content {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        max-height: none !important;
+        padding: 12px !important;
+        text-align: left !important;
+        background: var(--zenux-surface) !important;
+        border: 1px solid var(--zenux-accent-border) !important;
+        outline: none !important;
+        backdrop-filter: none !important;
+        border-radius: var(--zenux-radius-m) !important;
+
+        .tool-confirm-title {
+          margin: 0 0 10px !important;
+          font-size: 13px !important;
+          font-weight: 600 !important;
+        }
+
+        .buttons {
+          gap: 8px !important;
+          align-items: center !important;
+        }
+
+        .not-again {
+          font-size: 12px !important;
+        }
+      }
+
+      .zenux-empty {
+        margin: auto !important;
+      }
+
+      .bb-tool-run {
+        align-self: stretch !important;
+        flex-shrink: 0 !important;
+        border: 1px solid var(--zenux-border) !important;
+        border-radius: var(--zenux-radius-m) !important;
+        background: var(--zenux-surface) !important;
+        overflow: hidden !important;
+        max-height: 5000px !important;
+        transition: max-height 0.3s ease !important;
+
+        .bb-tool-run-header {
+          display: flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          height: 28px !important;
+          box-sizing: border-box !important;
+          padding: 6px 10px !important;
+          cursor: pointer !important;
+
+          &:hover {
+            background: var(--zenux-surface-hover) !important;
+          }
+
+          .bb-tool-run-status {
+            width: 14px !important;
+            height: 14px !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+
+            image,
+            svg {
+              width: 14px !important;
+              height: 14px !important;
+              display: block !important;
+            }
+
+            image {
+              -moz-context-properties: fill !important;
+            }
+          }
+
+          .bb-tool-run-title {
+            font-size: 12.5px !important;
+            font-weight: 600 !important;
+            color: var(--zenux-muted) !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+          }
+
+          .bb-tool-run-chevron {
+            width: 14px !important;
+            height: 14px !important;
+            margin-left: auto !important;
+            flex-shrink: 0 !important;
+            -moz-context-properties: fill !important;
+            fill: var(--zenux-muted) !important;
+            transform: rotate(0deg) !important;
+            transition: transform 0.18s var(--zenux-ease) !important;
+          }
+        }
+
+        &[data-state="working"] .bb-tool-run-status {
+          animation: spin 0.7s linear infinite !important;
+        }
+
+        &[data-state="working"] .bb-tool-run-status image {
+          fill: var(--zenux-muted) !important;
+        }
+
+        &[data-state="done"] .bb-tool-run-status image {
+          fill: var(--zenux-success) !important;
+        }
+
+        .bb-tool-run-rows {
+          display: flex !important;
+          flex-direction: column !important;
+          padding-left: 12px !important;
+        }
+
+        .bb-tool-row {
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+          padding: 5px 10px !important;
+          border-top: 1px solid var(--zenux-border) !important;
+          font-size: 12.5px !important;
+          color: var(--zenux-muted) !important;
+
+          &:hover {
+            background: var(--zenux-surface-hover) !important;
+          }
+
+          .bb-tool-row-icon {
+            width: 14px !important;
+            height: 14px !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+
+            image,
+            svg {
+              width: 14px !important;
+              height: 14px !important;
+              display: block !important;
+            }
+
+            image {
+              -moz-context-properties: fill !important;
+            }
+          }
+
+          &[data-status="loading"] .bb-tool-row-icon {
+            animation: spin 0.7s linear infinite !important;
+          }
+
+          &[data-status="loading"] .bb-tool-row-icon image {
+            fill: var(--zenux-muted) !important;
+          }
+
+          &[data-status="success"] .bb-tool-row-icon image {
+            fill: var(--zenux-success) !important;
+          }
+
+          &[data-status="error"] .bb-tool-row-icon image {
+            fill: var(--zenux-danger) !important;
+          }
+
+          &[data-status="declined"] .bb-tool-row-icon image {
+            fill: var(--zenux-warning) !important;
+          }
+
+          .bb-tool-row-label {
+            flex: 1 !important;
+            min-width: 0 !important;
+            font-weight: 500 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            cursor: pointer !important;
+          }
+
+          .bb-tool-row-time {
+            font-size: 11px !important;
+            opacity: 0.6 !important;
+            flex-shrink: 0 !important;
+          }
+        }
+
+        .bb-tool-row-detail {
+          margin: 0 10px 8px !important;
+          padding: 6px 8px !important;
+          border-radius: var(--zenux-radius-s) !important;
+          background: var(--zenux-bg) !important;
+          border: 1px solid var(--zenux-border) !important;
+          font-family: monospace !important;
+          font-size: 11px !important;
+          color: var(--zenux-muted) !important;
+          white-space: pre-wrap !important;
+          word-break: break-all !important;
+          max-height: 120px !important;
+          min-height: 0 !important;
+          overflow-y: auto !important;
+
+          &[hidden] {
+            display: none !important;
+          }
+        }
+
+        &.is-collapsed {
+          max-height: 28px !important;
+          cursor: pointer !important;
+        }
+
+        &.is-collapsed .bb-tool-run-chevron {
+          transform: rotate(-90deg) !important;
+        }
+      }
+    }
+
+    .bb-refs-bar {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 4px !important;
+      flex-shrink: 0 !important;
+      padding-right: 10px !important;
+
+      &:empty {
+        display: none !important;
+      }
+    }
+
+    .bb-build-bar {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      flex-shrink: 0 !important;
+      margin-right: 10px !important;
+      padding: 8px 10px !important;
+      border-radius: var(--zenux-radius-m) !important;
+      background: var(--zenux-accent-soft) !important;
+      border: 1px solid var(--zenux-accent-border) !important;
+
+      &[hidden] {
+        display: none !important;
+      }
+
+      .bb-build-status {
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        color: var(--zenux-text) !important;
+        margin-right: auto !important;
+      }
+
+      button {
+        margin: 0 !important;
+      }
+    }
+
+    .bb-ref-chip {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 5px !important;
+      max-width: 220px !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      color: var(--zenux-text) !important;
+      background: var(--zenux-accent-soft) !important;
+      border: 1px solid var(--zenux-accent-border) !important;
+      border-radius: var(--zenux-radius-pill) !important;
+      padding: 2px 8px !important;
+
+      img {
+        width: 14px !important;
+        height: 14px !important;
+        flex-shrink: 0 !important;
+      }
+
+      span {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      .bb-ref-remove {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        color: inherit !important;
+        opacity: 0.55 !important;
+        padding: 0 0 0 2px !important;
+        line-height: 1 !important;
+
+        img {
+          width: 12px !important;
+          height: 12px !important;
+          display: block !important;
+          -moz-context-properties: fill, stroke !important;
+          fill: currentColor !important;
+          stroke: currentColor !important;
+        }
+
+        &:hover {
+          color: var(--zenux-danger) !important;
+          opacity: 1 !important;
+        }
+      }
+    }
+
+    .bb-library-composer {
+      position: relative !important;
+      display: flex !important;
+      gap: 10px !important;
+      align-items: end !important;
+      flex-shrink: 0 !important;
+      padding-right: 10px !important;
+
+      textarea {
+        flex-grow: 1 !important;
+        resize: none !important;
+        min-height: 20px !important;
+        max-height: 160px !important;
+        font-size: 14px !important;
+      }
+
+      .send-btn,
+      .stop-btn {
+        margin-left: auto !important;
+        padding: 3px !important;
+        align-self: end !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+        max-width: 30px !important;
+        max-height: 30px !important;
+        display: flex;
+      }
+    }
+
+    .bb-library-popup {
+      position: absolute !important;
+      left: 0 !important;
+      right: 10px !important;
+      bottom: calc(100% + 6px) !important;
+      max-height: 180px !important;
+      overflow-y: auto !important;
+      background: var(--zenux-bg) !important;
+      border: 1px solid var(--zenux-border) !important;
+      border-radius: var(--zenux-radius-m) !important;
+      box-shadow: var(--zenux-shadow-l) !important;
+      padding: 3px !important;
+      z-index: 10 !important;
+
+      &[hidden] {
+        display: none !important;
+      }
+
+      .bb-popup-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 5px 8px !important;
+        border-radius: var(--zenux-radius-s) !important;
+        cursor: pointer !important;
+        min-width: 0 !important;
+
+        &.is-active,
+        &:hover {
+          background: var(--zenux-surface-hover) !important;
+        }
+
+        .bb-popup-icon {
+          width: 16px !important;
+          height: 16px !important;
+          flex-shrink: 0 !important;
+        }
+
+        .bb-popup-title {
+          font-size: 13px !important;
+          font-weight: 600 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          flex-shrink: 1 !important;
+          min-width: 0 !important;
+        }
+
+        .bb-popup-desc {
+          font-size: 12px !important;
+          color: var(--zenux-muted) !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          margin-left: auto !important;
+          padding-left: 8px !important;
+          flex-shrink: 10 !important;
+          min-width: 0 !important;
+        }
+      }
+    }
+  }
+}
+
+#zen-library-content .zen-library-section[data-section="browsebot"] {
+  max-width: none !important;
+}
+
+.bb-create-mod-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+
+  .bb-create-mod-modal {
+    width: 360px !important;
+    max-width: 90vw !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    padding: 18px !important;
+    border-radius: var(--zenux-radius-m) !important;
+    background: var(--zenux-bg) !important;
+    border: 1px solid var(--zenux-border) !important;
+    box-shadow: var(--zenux-shadow-l) !important;
+    color: var(--zenux-text) !important;
+
+    h3 {
+      margin: 0 !important;
+      font-size: 16px !important;
+    }
+
+    .bb-create-mod-hint {
+      margin: 0 !important;
+      font-size: 12px !important;
+      color: var(--zenux-muted) !important;
+    }
+
+    label {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+    }
+
+    .bb-create-mod-error {
+      font-size: 12px !important;
+      color: var(--zenux-danger) !important;
+
+      &:empty {
+        display: none !important;
+      }
+    }
+
+    .bb-create-mod-allow {
+      flex-direction: row !important;
+      align-items: center !important;
+      font-weight: 400 !important;
+      font-size: 12px !important;
+      padding: 8px 10px !important;
+      border-radius: var(--zenux-radius-s) !important;
+      color: var(--zenux-warning) !important;
+      background: var(--zenux-warning-bg) !important;
+    }
+
+    .bb-create-mod-actions {
+      display: flex !important;
+      justify-content: flex-end !important;
+      gap: 8px !important;
+
+      button {
+        margin: 0 !important;
+      }
+    }
+  }
+}
+
+.tool-confirmation-content {
+  padding: 20px;
+  text-align: center;
+  position: relative;
+  width: 340px;
+  min-width: 200px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: var(--zenux-radius-m) !important;
+  outline: 1px solid rgba(0, 0, 0, 1) !important;
+  border: 1px solid light-dark(rgba(20, 20, 20, 0.2), rgba(235, 235, 235, 0.3)) !important;
+  background: var(--browse-bot-dialog-bg) !important;
+  backdrop-filter: var(--browse-bot-dialog-backdrop-filter);
+
+  p {
+    margin-bottom: 15px;
+    font-size: 16px;
+  }
+
+  .tool-confirm-preview,
+  .tool-confirm-detail {
+    text-align: left !important;
+    margin: 0 0 12px !important;
+    font-size: 12px !important;
+  }
+
+  .tool-confirm-warning {
+    text-align: left !important;
+    margin: 0 0 12px !important;
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+    border-radius: var(--zenux-radius-s) !important;
+    color: var(--zenux-warning) !important;
+    background: var(--zenux-warning-bg) !important;
+  }
+
+  .zenux-code-confirm-code {
+    text-align: left !important;
+    margin: 0 0 12px !important;
+  }
+
+  .buttons {
+    display: flex;
+    justify-content: space-between;
+
+    .right-side-buttons {
+      display: flex !important;
+      gap: 10px !important;
+
+      &:only-child {
+        margin-left: auto !important;
+      }
+    }
+
+    button {
+      margin: 0 !important;
+    }
+  }
+}
